@@ -643,6 +643,11 @@ def logout():
 def handle_button_action():
     """Handle interactive button clicks from the frontend"""
     try:
+        # Critical safety check for AI components
+        if not conversation_memory or not nlu_processor:
+            logger.error("FATAL: AI components are not initialized. Service unavailable.")
+            return jsonify({"error": "The AI assistant is currently unavailable. Please try again later."}), 503
+
         data = request.get_json() or {}
         user_id = data.get("userId", "").strip()
         button_type = data.get("buttonType", "").strip()
@@ -797,6 +802,11 @@ def manage_medicine_reminders():
     New comprehensive endpoint to manage medicine reminders (get, add, update_adherence)
     """
     try:
+        # Critical safety check for AI components
+        if not conversation_memory:
+            logger.error("FATAL: Conversation memory component not initialized. Service unavailable.")
+            return jsonify({"error": "The AI assistant is currently unavailable. Please try again later."}), 503
+
         data = request.get_json() or {}
         user_id = data.get("userId", "").strip()
         action = data.get("action", "get").strip().lower()  # 'get', 'add', 'update', 'delete'
@@ -1011,6 +1021,11 @@ def predict():
     try:
         start_time = time.time()
         update_system_state('predict')
+
+        # Critical safety check for AI components
+        if not conversation_memory or not nlu_processor:
+            logger.error("FATAL: AI components are not initialized. Service unavailable.")
+            return jsonify({"error": "The AI assistant is currently unavailable. Please try again later."}), 503
 
         data = request.get_json() or {}
         user_message = (data.get("message") or "").strip()

@@ -5,7 +5,6 @@ Simplified conversation tracking and user context management for health app navi
 
 import json
 import logging
-from logging import logger
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, field
