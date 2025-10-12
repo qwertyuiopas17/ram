@@ -313,32 +313,36 @@ class ProgressiveNLUProcessor:
 
 
     def _get_fallback_analysis(self, message: str, excluded_intents: List[str] = None) -> Dict[str, Any]:
-        """Generates NLU analysis using keywords for health app navigation."""
+        """Generates NLU analysis using keywords, with improved logic for short messages."""
 
-        # Handle short, context-dependent messages
-        if len(message.split()) <= 2:
-            # Check if short message contains keywords from any specific intent category
-            for intent_category, intent_data in self.intent_categories.items():
-                if intent_category == 'general_inquiry' or intent_category == 'out_of_scope':
-                    continue  # Skip general and out-of-scope categories
+        # First, check for specific intents even in short messages
+        for intent, data in self.intent_categories.items():
+            if any(re.search(r'\b' + re.escape(keyword) + r'\b', message, re.IGNORECASE) for keyword in data['keywords']):
+                if intent != 'general_inquiry':
+                    # If a specific keyword is found, immediately classify with that intent
+                    self.logger.info(f"Short message '{message}' matched specific intent '{intent}'.")
+                    analysis = self._comprehensive_intent_detection(message, excluded_intents)
+                    urgency_analysis = self._assess_urgency_and_severity(message, analysis)
+                    context_entities = self._extract_health_context(message)
+                    language_detected = self._detect_language(message)
+                    user_needs = self._identify_user_needs(analysis['primary_intent'])
 
-                category_keywords = intent_data['keywords']
-                has_matching_keyword = any(keyword in message.lower() for keyword in category_keywords)
+                    # Boost confidence for clear short commands
+                    analysis['confidence'] = 0.95
 
-                if has_matching_keyword:
-                    self.logger.info(f"Short message with {intent_category} keyword detected: '{message}'. Using {intent_category} intent.")
                     return {
-                        'primary_intent': intent_category,
-                        'confidence': 0.8,
-                        'urgency_level': intent_data.get('urgency_indicators', ['medium'])[0] if intent_data.get('urgency_indicators') else 'medium',
-                        'language_detected': self._detect_language(message),
-                        'context_entities': {intent_category: message.lower()},
-                        'user_needs': self._identify_user_needs(intent_category),
+                        'primary_intent': analysis['primary_intent'],
+                        'confidence': analysis['confidence'],
+                        'urgency_level': urgency_analysis['urgency_level'],
+                        'language_detected': language_detected,
+                        'context_entities': context_entities,
+                        'user_needs': user_needs,
                         'in_scope': True
                     }
 
-            # If no specific intent keywords found, use general_inquiry
-            self.logger.info(f"Short message detected: '{message}'. Using general_inquiry intent.")
+        # If no specific keywords are found in a short message, THEN it's a general inquiry
+        if len(message.split()) <= 4: # Increased threshold to catch more conversational phrases
+            self.logger.info(f"Short message without specific keywords: '{message}'. Using general_inquiry.")
             return {
                 'primary_intent': 'general_inquiry',
                 'confidence': 0.7,
@@ -349,7 +353,7 @@ class ProgressiveNLUProcessor:
                 'in_scope': True
             }
 
-        # Perform keyword-based analysis
+        # Perform standard analysis for longer messages
         analysis = self._comprehensive_intent_detection(message, excluded_intents)
         urgency_analysis = self._assess_urgency_and_severity(message, analysis)
         context_entities = self._extract_health_context(message)
