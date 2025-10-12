@@ -314,19 +314,35 @@ class ProgressiveNLUProcessor:
 
     def _get_fallback_analysis(self, message: str, excluded_intents: List[str] = None) -> Dict[str, Any]:
         """Generates NLU analysis using keywords for health app navigation."""
-        
+
         # Handle short, context-dependent messages
         if len(message.split()) <= 2:
-            self.logger.info(f"Short message detected: '{message}'. Using general_inquiry intent.")
-            return {
-                'primary_intent': 'general_inquiry',
-                'confidence': 0.7,
-                'urgency_level': 'low',
-                'language_detected': self._detect_language(message),
-                'context_entities': {},
-                'user_needs': ['guidance'],
-                'in_scope': True
-            }
+            # Check if short message contains symptom keywords
+            symptom_keywords = self.intent_categories['symptom_triage']['keywords']
+            has_symptom_keyword = any(keyword in message.lower() for keyword in symptom_keywords)
+
+            if has_symptom_keyword:
+                self.logger.info(f"Short message with symptom detected: '{message}'. Using symptom_triage intent.")
+                return {
+                    'primary_intent': 'symptom_triage',
+                    'confidence': 0.8,
+                    'urgency_level': 'medium',
+                    'language_detected': self._detect_language(message),
+                    'context_entities': {'symptom': message.lower()},
+                    'user_needs': ['health_assessment'],
+                    'in_scope': True
+                }
+            else:
+                self.logger.info(f"Short message detected: '{message}'. Using general_inquiry intent.")
+                return {
+                    'primary_intent': 'general_inquiry',
+                    'confidence': 0.7,
+                    'urgency_level': 'low',
+                    'language_detected': self._detect_language(message),
+                    'context_entities': {},
+                    'user_needs': ['guidance'],
+                    'in_scope': True
+                }
 
         # Perform keyword-based analysis
         analysis = self._comprehensive_intent_detection(message, excluded_intents)

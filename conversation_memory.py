@@ -613,6 +613,128 @@ class ProgressiveConversationMemory:
                     })
 
         return alerts
+    # Add these two new functions inside the ProgressiveConversationMemory class
+
+    def add_prescription_summary(self, user_id: str, prescription_data: Dict[str, Any]) -> None:
+        """
+        Adds a new prescription summary to the user's profile.
+        This is called after a prescription is uploaded and analyzed.
+        """
+        profile = self.create_or_get_user(user_id)
+        
+        # Use the prescription_id from the data as the key
+        prescription_id = prescription_data.get('prescription_id', f'rx_{datetime.now().isoformat()}')
+        
+        # Add a timestamp to the data for sorting later
+        prescription_data['saved_at'] = datetime.now().isoformat()
+        
+        profile.prescription_summary[prescription_id] = prescription_data
+        
+        self.logger.info(f"Added prescription summary {prescription_id} for user {user_id}")
+
+        # --- Add this line to trigger the automatic reminder creation ---
+        self._auto_generate_reminders_from_prescription(profile, prescription_data)
+        
+        # You can add logic here for auto-generating reminders from this data
+        # For now, simply saving it is the critical step.
+
+    def get_prescription_summary(self, user_id: str, prescription_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """
+        Retrieves a prescription summary for a user.
+        If no ID is given, it returns the most recent one.
+        """
+        profile = self.create_or_get_user(user_id)
+        
+        if not profile.prescription_summary:
+            self.logger.warning(f"No prescription summaries found for user {user_id}")
+            return None
+        
+        if prescription_id and prescription_id in profile.prescription_summary:
+            return profile.prescription_summary[prescription_id]
+        
+        # If no ID is given, find the most recently saved summary
+        if not prescription_id:
+            try:
+                # Sort summaries by the 'saved_at' timestamp in descending order and get the first one
+                latest_summary = sorted(
+                    profile.prescription_summary.values(), 
+                    key=lambda x: x.get('saved_at', '1970-01-01'), 
+                    reverse=True
+                )[0]
+                return latest_summary
+            except (IndexError, KeyError):
+                # Fallback in case sorting fails or 'saved_at' is missing
+                self.logger.warning(f"Could not sort prescriptions for user {user_id}, returning first available.")
+                return next(iter(profile.prescription_summary.values()))
+
+        self.logger.warning(f"Prescription ID {prescription_id} not found for user {user_id}")
+        return None
+    
+    def _auto_generate_reminders_from_prescription(self, profile: UserProfile, prescription_data: Dict[str, Any]):
+        """
+        A helper method to intelligently parse prescription data and create
+        pre-filled, disabled reminders for the user to activate.
+        """
+        medications = prescription_data.get('medications', [])
+        if not medications:
+            return
+
+        self.logger.info(f"Attempting to auto-generate reminders from {len(medications)} medications for user {profile.user_id}.")
+        
+        new_reminders_created = 0
+
+        for med in medications:
+            med_name = med.get('name')
+            if not med_name:
+                continue
+
+            # --- Check to prevent adding duplicate reminders for the same medicine ---
+            existing_reminder_names = {r.get('medicine_name', '').lower() for r in profile.medicine_reminders}
+            if med_name.lower() in existing_reminder_names:
+                self.logger.info(f"Reminder for '{med_name}' already exists. Skipping.")
+                continue
+
+            # --- Intelligent Time Parsing Logic ---
+            times = []
+            time_instruction = med.get('time', '').lower()
+            
+            # Map common phrases to specific times
+            if 'once a day' in time_instruction or 'daily' in time_instruction or 'morning' in time_instruction:
+                times.append("08:00")
+            if 'twice a day' in time_instruction or 'afternoon' in time_instruction:
+                times.append("14:00")
+            if 'thrice a day' in time_instruction or 'evening' in time_instruction:
+                times.append("20:00")
+            if 'night' in time_instruction or 'before bed' in time_instruction:
+                times.append("22:00")
+            
+            # If no phrases match, but there are multiple times, try to extract them
+            if not times and ',' in time_instruction:
+                potential_times = [t.strip() for t in time_instruction.split(',')]
+                times.extend(potential_times)
+            
+            # Default if no time is found
+            if not times:
+                times.append("09:00") # Default to a morning reminder
+
+            reminder = {
+                'medicine_name': med_name,
+                'dosage': med.get('dosage', 'As prescribed'),
+                'times': times,
+                'duration_days': 30,  # Default duration
+                'start_date': datetime.now().strftime('%Y-%m-%d'),
+                'instructions': med.get('time', 'As directed by your doctor.'),
+                'source': 'prescription_upload', # To identify auto-generated reminders
+                'reminder_enabled': False, # User must manually enable it
+                'created_at': datetime.now().isoformat()
+            }
+
+            profile.medicine_reminders.append(reminder)
+            new_reminders_created += 1
+            self.logger.info(f"Successfully created a pre-filled reminder for '{med_name}'.")
+
+        if new_reminders_created > 0:
+            self.logger.info(f"Auto-generated {new_reminders_created} new medicine reminders for user {profile.user_id}.")
 
 # Global instance for easy import
 conversation_memory = ProgressiveConversationMemory()
