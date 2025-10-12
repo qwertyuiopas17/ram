@@ -317,13 +317,12 @@ Primary Role:
 
 **Example for "how to book appointment":**
 {
-    "response": "Of course, here is how you can book an appointment:\n1. Select a doctor category (like General Physician).\n2. Choose a doctor from the list.\n3. Pick an available date and time slot.\n4. Confirm your booking.\n\nYou can start now by clicking the button below.",
+    "response": "📅 **Opening appointment booking...**\n\n**Here is the step-by-step process:**\n1. 🔍 Select a doctor category...\n2. 👨‍⚕️ Choose your preferred doctor...\n3. 🗓️ Pick a date and time...\n4. ✅ Confirm your booking.\n\n*You can start now by clicking the button below.*",
     "action": "CONTINUE_CONVERSATION",
-    "parameters": {},
     "interactive_buttons": [
         {
             "type": "appointment_booking",
-            "text": "📅 Book an Appointment",
+            "text": "📅 Book Appointment",
             "action": "NAVIGATE_TO_APPOINTMENT_BOOKING",
             "style": "primary"
         }

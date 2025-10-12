@@ -317,32 +317,37 @@ class ProgressiveNLUProcessor:
 
         # Handle short, context-dependent messages
         if len(message.split()) <= 2:
-            # Check if short message contains symptom keywords
-            symptom_keywords = self.intent_categories['symptom_triage']['keywords']
-            has_symptom_keyword = any(keyword in message.lower() for keyword in symptom_keywords)
+            # Check if short message contains keywords from any specific intent category
+            for intent_category, intent_data in self.intent_categories.items():
+                if intent_category == 'general_inquiry' or intent_category == 'out_of_scope':
+                    continue  # Skip general and out-of-scope categories
 
-            if has_symptom_keyword:
-                self.logger.info(f"Short message with symptom detected: '{message}'. Using symptom_triage intent.")
-                return {
-                    'primary_intent': 'symptom_triage',
-                    'confidence': 0.8,
-                    'urgency_level': 'medium',
-                    'language_detected': self._detect_language(message),
-                    'context_entities': {'symptom': message.lower()},
-                    'user_needs': ['health_assessment'],
-                    'in_scope': True
-                }
-            else:
-                self.logger.info(f"Short message detected: '{message}'. Using general_inquiry intent.")
-                return {
-                    'primary_intent': 'general_inquiry',
-                    'confidence': 0.7,
-                    'urgency_level': 'low',
-                    'language_detected': self._detect_language(message),
-                    'context_entities': {},
-                    'user_needs': ['guidance'],
-                    'in_scope': True
-                }
+                category_keywords = intent_data['keywords']
+                has_matching_keyword = any(keyword in message.lower() for keyword in category_keywords)
+
+                if has_matching_keyword:
+                    self.logger.info(f"Short message with {intent_category} keyword detected: '{message}'. Using {intent_category} intent.")
+                    return {
+                        'primary_intent': intent_category,
+                        'confidence': 0.8,
+                        'urgency_level': intent_data.get('urgency_indicators', ['medium'])[0] if intent_data.get('urgency_indicators') else 'medium',
+                        'language_detected': self._detect_language(message),
+                        'context_entities': {intent_category: message.lower()},
+                        'user_needs': self._identify_user_needs(intent_category),
+                        'in_scope': True
+                    }
+
+            # If no specific intent keywords found, use general_inquiry
+            self.logger.info(f"Short message detected: '{message}'. Using general_inquiry intent.")
+            return {
+                'primary_intent': 'general_inquiry',
+                'confidence': 0.7,
+                'urgency_level': 'low',
+                'language_detected': self._detect_language(message),
+                'context_entities': {},
+                'user_needs': ['guidance'],
+                'in_scope': True
+            }
 
         # Perform keyword-based analysis
         analysis = self._comprehensive_intent_detection(message, excluded_intents)

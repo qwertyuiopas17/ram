@@ -641,48 +641,19 @@ def logout():
         })
 @app.route("/v1/button-action", methods=["POST"])
 def handle_button_action():
-    """Handle interactive button clicks from the frontend"""
-    try:
-        # Critical safety check for AI components
-        if not conversation_memory or not nlu_processor:
-            logger.error("FATAL: AI components are not initialized. Service unavailable.")
-            return jsonify({"error": "The AI assistant is currently unavailable. Please try again later."}), 503
+    data = request.get_json() or {}
+    user_id = data.get("userId")
+    button_action = data.get("buttonAction")
 
-        data = request.get_json() or {}
-        user_id = data.get("userId", "").strip()
-        button_type = data.get("buttonType", "").strip()
-        button_action = data.get("buttonAction", "").strip()
+    logger.info(f"Button action triggered for user {user_id}: {button_action}")
 
-        if not user_id or not button_type:
-            return jsonify({"error": "userId and buttonType are required"}), 400
+    # This endpoint is now just for logging/analytics.
+    # The old, crashing logic has been removed.
 
-        # Update conversation memory based on button interaction
-        if button_type == 'appointment_booking':
-            conversation_memory.show_appointment_button(user_id, False)  # Hide after click
-            conversation_memory.set_current_task(user_id, 'appointment_booking')
-
-        elif button_type == 'medicine_scan':
-            conversation_memory.show_medicine_scan_button(user_id, False)  # Hide after click
-            conversation_memory.set_current_task(user_id, 'medicine_scan')
-
-        elif button_type == 'prescription_view':
-            conversation_memory.show_prescription_button(user_id, False)  # Hide after click
-            conversation_memory.set_current_task(user_id, 'prescription_view')
-
-        elif button_type == 'emergency_call':
-            update_system_state('button_action', sos_triggered=1)
-
-        # Return navigation response
-        return jsonify({
-            "success": True,
-            "action": button_action,
-            "message": f"Navigating to {button_type}",
-            "parameters": data.get("parameters", {})
-        })
-
-    except Exception as e:
-        logger.error(f"Button action error: {e}")
-        return jsonify({"error": "Failed to process button action"}), 500
+    return jsonify({
+        "success": True,
+        "message": f"Action {button_action} acknowledged."
+    })
 
 @app.route("/v1/user-progress", methods=["POST"])
 def get_user_progress():
