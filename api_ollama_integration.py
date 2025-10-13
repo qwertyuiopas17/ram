@@ -262,12 +262,13 @@ class GroqScoutClient:
 
 class SehatSaharaApiClient:
     """Enhanced mental health specific client using API service"""
-    
+
     def __init__(self, model: str = "llama-3.1-8b-instant", api_key: str = None, base_url: str = "https://api.groq.com/openai/v1"):
-        self.client = ApiClient(api_key=api_key, base_url=base_url, model=model)
+        # --- THIS IS THE FIX ---
+        # Pass the api_key as a list to the 'api_keys' argument
+        self.client = ApiClient(api_keys=[api_key] if api_key else None, base_url=base_url, model=model)
         self.is_available = self.client.is_available
         self.logger = logging.getLogger(__name__)
-
         self.base_system_prompt = """You are 'Sehat Sahara', a friendly and empathetic AI health assistant for rural patients in Punjab. Your communication must be simple, clear, and available in Punjabi (pa), Hindi (hi), and English (en).
 
 Primary Role:
