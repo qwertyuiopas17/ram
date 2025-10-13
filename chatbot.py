@@ -984,226 +984,136 @@ def get_prescription_summary():
         logger.error(traceback.format_exc())
         return jsonify({"error": "Failed to get prescription summary"}), 500
 
+# In chatbot.py
+
 @app.route("/v1/predict", methods=["POST"])
 def predict():
     """
-    Enhanced prediction endpoint with improved context handling and response quality
+    Final, stable prediction endpoint with robust conversation memory handling
+    and clean fallback logic.
     """
     try:
         start_time = time.time()
         update_system_state('predict')
 
         # Critical safety check for AI components
-        if not conversation_memory or not nlu_processor:
-            logger.error("FATAL: AI components are not initialized. Service unavailable.")
+        if not nlu_processor or not conversation_memory:
+            logger.error("FATAL: Core AI components are not initialized. Service unavailable.")
             return jsonify({"error": "The AI assistant is currently unavailable. Please try again later."}), 503
 
         data = request.get_json() or {}
         user_message = (data.get("message") or "").strip()
-        image_b64 = data.get("imageData")
         user_id_str = (data.get("userId") or "").strip()
 
-        if not user_id_str:
-            return jsonify({"error": "User ID is required."}), 400
-        if not user_message and not image_b64:
-            return jsonify({"error": "Either message or imageData is required."}), 400
+        if not user_id_str or not user_message:
+            return jsonify({"error": "userId and message are required."}), 400
 
         # Load current user by patient_id
         current_user = User.query.filter_by(patient_id=user_id_str, is_active=True).first()
         if not current_user:
             return jsonify({"error": "User not found.", "login_required": True}), 401
 
-        user_progress = conversation_memory.get_user_progress_summary(user_id_str) if conversation_memory else {}
-        followup_check = conversation_memory.check_post_appointment_followup(user_id_str) if conversation_memory else {'needed': False}
-        
-        # Detect language from message using centralized NLU processor
-        detected_language_code = nlu_processor._detect_language(user_message) if nlu_processor else (current_user.preferred_language or "en")
-
-        history_turns = conversation_memory.get_conversation_context(current_user.patient_id, turns=8) if conversation_memory else []
+        # --- CORRECTLY BUILD CONVERSATION HISTORY ---
+        history_turns = conversation_memory.get_conversation_context(current_user.patient_id, turns=8)
         nlu_history = []
         for turn in history_turns:
             nlu_history.append({'role': 'user', 'content': turn.get('user_message', '')})
+            bot_content_str = turn.get('bot_response', '{}')
             try:
-                bot_response_json = json.loads(turn.get('bot_response', '{}'))
-                bot_content = bot_response_json.get('response', '')
+                # Bot response is stored as a JSON string, extract the actual text
+                bot_json = json.loads(bot_content_str)
+                actual_response = bot_json.get('response', '')
+                if actual_response:
+                    nlu_history.append({'role': 'assistant', 'content': actual_response})
             except (json.JSONDecodeError, AttributeError):
-                bot_content = turn.get('bot_response', '')
-            nlu_history.append({'role': 'assistant', 'content': bot_content})
+                logger.warning("Could not parse bot response from history, skipping.")
 
-        effective_message = user_message
-        scout_text = None
-        contains_emoji = bool(re.search(r"[\U0001F300-\U0001FAFF\U00002600-\U000026FF]", user_message))
-        multimodal_triggered = bool(image_b64) or contains_emoji
-        
-        if multimodal_triggered and groq_scout and groq_scout.is_available:
-            if image_b64:
-                scout_text = groq_scout.interpret_image(
-                    user_message=user_message, 
-                    image_b64=image_b64, 
-                    language=detected_language_code, 
-                    context_history=nlu_history
-                )
-            else:
-                scout_text = groq_scout.interpret_emojis(
-                    user_message=user_message, 
-                    language=detected_language_code, 
-                    context_history=nlu_history
-                )
-            
-            if scout_text:
-                effective_message = f"{user_message}\n\n[Context: {scout_text}]"
-
+        # --- NLU PROCESSING WITH CONTEXT ---
         nlu_understanding = nlu_processor.understand_user_intent(
-            effective_message, 
-            conversation_history=nlu_history, 
+            user_message,
+            conversation_history=nlu_history,
             sehat_sahara_mode=True
-        ) if nlu_processor else {}
+        )
+        detected_language_code = nlu_understanding.get('language_detected', 'en')
 
-        # Emergency handling protocol (unchanged)
-        is_emergency = (nlu_understanding.get('primary_intent') == 'emergency_assistance') or (nlu_understanding.get('urgency_level') == 'emergency')
-        
+        # --- EMERGENCY HANDLING ---
+        is_emergency = (nlu_understanding.get('primary_intent') == 'emergency_assistance') or \
+                       (nlu_understanding.get('urgency_level') == 'emergency')
+
         if is_emergency:
             action_payload = {
-                "response": "Emergency detected. Connecting to emergency services. For ambulance, call 108.",
+                "response": "Emergency detected! For an ambulance, please call 108 immediately.",
                 "action": "TRIGGER_SOS",
-                "parameters": {"emergency_number": "108", "type": "medical_emergency"},
+                "parameters": {"emergency_number": "108"},
                 "interactive_buttons": []
             }
             update_system_state('predict', sos_triggered=1)
         else:
-            action_payload_str = None
+            # --- AI-DRIVEN RESPONSE GENERATION ---
             action_payload = None
-            
             if sehat_sahara_client and sehat_sahara_client.is_available:
-                # Prepare context dictionary for AI client
                 context = {
-                    "user_progress": user_progress,
-                    "followup_needed": followup_check.get('needed', False),
-                    "message_count": user_progress.get('interactive_buttons', {}).get('message_count', 0),
-                    "recent_appointments": user_progress.get('appointments_booked', 0),
-                    "feedback_pending": user_progress.get('feedback_pending', False),
                     "user_intent": nlu_understanding.get('primary_intent'),
                     "conversation_stage": nlu_understanding.get('conversation_stage'),
-                    "severity_score": 0.5,
-                    "emotional_state": 'neutral',
                     "urgency_level": nlu_understanding.get('urgency_level', 'low'),
                     "language": detected_language_code,
-                    "context_history": nlu_history
+                    "context_history": nlu_history  # Pass the constructed history
                 }
-
                 action_payload_str = sehat_sahara_client.generate_sehatsahara_response(
-                    user_message=effective_message,
+                    user_message=user_message,
                     context=context
                 )
-                
                 if action_payload_str:
                     try:
                         action_payload = json.loads(action_payload_str)
                     except json.JSONDecodeError:
-                        logger.warning("API returned invalid JSON. Falling back to local generator.")
+                        logger.warning("AI client returned invalid JSON. Falling back.")
                         action_payload = None
 
-            # Fallback to local response generator if API unavailable or fails
+            # --- LOCAL FALLBACK LOGIC ---
             if not action_payload:
+                logger.warning(f"AI failed or unavailable. Using local fallback for intent: {nlu_understanding.get('primary_intent')}")
                 update_system_state('predict', fallback_responses=1)
                 action_payload = response_generator.generate_response(
-                    user_message=effective_message,
-                    nlu_result={**nlu_understanding, "language_detected": detected_language_code},
-                    user_context={
-                        "user_id": current_user.patient_id, 
-                        "session_id": session.get('session_record_id'),
-                        "progress": user_progress,
-                        "followup_needed": followup_check.get('needed', False)
-                    },
-                    conversation_history=nlu_history,
-                    sehat_sahara_mode=True
-                ) if response_generator else {}
+                    user_message=user_message,
+                    nlu_result=nlu_understanding,
+                    conversation_history=nlu_history
+                )
 
-        if action_payload.get("response"):
-            action_payload["response"] = clean_ai_response(action_payload["response"])
-
+        # --- DATABASE & MEMORY UPDATE ---
+        bot_response_str = json.dumps(action_payload, ensure_ascii=False)
         conversation_memory.add_conversation_turn(
             user_id=current_user.patient_id,
-            user_message=effective_message,
-            bot_response=json.dumps(action_payload, ensure_ascii=False),
+            user_message=user_message,
+            bot_response=bot_response_str,
             nlu_result=nlu_understanding,
-            action_taken=action_payload.get("action"),
-            session_id=session.get('session_record_id')
-        ) if conversation_memory else None
-
-        # Save to database
-        turn = ConversationTurn(
-            user_id=current_user.id,
-            user_message=effective_message,
-            bot_response=json.dumps(action_payload, ensure_ascii=False),
-            detected_intent=nlu_understanding.get('primary_intent'),
-            intent_confidence=nlu_understanding.get('confidence', 0.5),
-            language_detected=detected_language_code,
-            urgency_level=nlu_understanding.get('urgency_level', 'low'),
-            response_time_ms=int((time.time() - start_time) * 1000),
-            action_triggered=action_payload.get("action"),
+            action_taken=action_payload.get("action")
         )
-        turn.set_action_parameters(action_payload.get("parameters", {}))
-        turn.set_context_entities(nlu_understanding.get('context_entities', {}))
-        db.session.add(turn)
 
-        # Update session counters
-        try:
-            session_record_id = session.get('session_record_id')
-            if session_record_id:
-                user_session = UserSession.query.get(session_record_id)
-                if user_session:
-                    user_session.conversations_in_session += 1
-                    user_session.actions_triggered_in_session += 1
-        except Exception:
-            pass
-
+        # Save turn to the database
+        db_turn = ConversationTurn(
+            user_id=current_user.id,
+            user_message=user_message,
+            bot_response=bot_response_str,
+            detected_intent=nlu_understanding.get('primary_intent'),
+            response_time_ms=int((time.time() - start_time) * 1000)
+        )
+        db.session.add(db_turn)
         db.session.commit()
 
-        enriched = {
-            **action_payload,
-            "analysis": {
-                "intent": nlu_understanding.get('primary_intent'),
-                "confidence": nlu_understanding.get('confidence', 0.5),
-                "language": detected_language_code,
-                "urgency": nlu_understanding.get('urgency_level', 'low'),
-                "in_scope": nlu_understanding.get('in_scope', True),
-                "conversation_stage": nlu_understanding.get('conversation_stage', 'understanding')
-            },
-            "system_info": {
-                "response_time_ms": int((time.time() - start_time) * 1000),
-                "api_available": bool(sehat_sahara_client and sehat_sahara_client.is_available),
-                "multimodal_used": multimodal_triggered,
-                "context_turns": len(nlu_history) // 2
-            }
-        }
-        return jsonify(enriched)
+        return jsonify(action_payload)
 
     except Exception as e:
-        logger.error(f"Error in predict for user {data.get('userId', 'unknown')}: {e}")
-        logger.error(traceback.format_exc())
+        logger.error(f"FATAL ERROR in /predict endpoint: {e}", exc_info=True)
         update_system_state('predict', success=False)
-
-        error_response = {
-            "error": True,
-            "response": "I'm having trouble processing your message right now. Please try again in a moment.",
+        # Provide a safe, generic error response
+        return jsonify({
+            "response": "I'm having a technical issue right now. Please try again in a moment.",
             "action": "SHOW_APP_FEATURES",
             "parameters": {},
-            "fallback_resources": {
-                "emergency_services": "108",
-                "health_helpline": "104"
-            },
-            "analysis": {
-                "intent": "error",
-                "confidence": 0.0,
-                "language": "en",
-                "urgency": "low",
-                "in_scope": True
-            }
-        }
-        return jsonify(error_response), 500
-
-# (deleted)
+            "interactive_buttons": [],
+            "error": True
+        }), 500
 
 @app.route("/v1/book-doctor", methods=["POST"])
 def book_doctor():

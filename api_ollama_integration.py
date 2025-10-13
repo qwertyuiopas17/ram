@@ -9,7 +9,7 @@ import requests
 import os
 import time # Import the time module
 from typing import Dict, Any, List, Optional
-
+import re 
 class ApiClient:
     """Enhanced client for interacting with API-based LLM service with rotating API keys."""
     
@@ -318,7 +318,9 @@ CRITICAL CONVERSATIONAL RULES:
 
 2. CONTEXTUAL BUTTONS: The interactive_buttons array should be EMPTY by default. Only include buttons when suggesting a clear next action for the 3 allowed functions (appointment booking, medicine scanning, prescription upload). For simple greetings like "hello", there must be NO buttons. For symptom discussions, NO buttons should appear. For general questions, NO buttons should appear.
 
-3. GREETING HANDLING: For greetings (hello, hi, namaste, etc.), provide a warm, friendly welcome that introduces your capabilities WITHOUT any buttons. Example: "Hello! I'm Sehat Sahara, your health assistant. I can help you book doctor appointments, find medicines, check your health records, and answer health questions. How can I help you today?"
+3. GREETING HANDLING: For greetings (hello, hi, namaste, etc.), provide a warm, friendly welcome that introduces your capabilities WITHOUT any buttons, in the required JSON format.
+   Example:
+   {"response": "Hello! I'm Sehat Sahara, your health assistant. I can help you book doctor appointments, find medicines, check your health records, and answer health questions. How can I help you today?", "action": "CONTINUE_CONVERSATION", "parameters": {}, "interactive_buttons": []}
 
 4. HOME REMEDIES & DISCLAIMER: You may suggest general, safe home remedies (e.g., "rest and stay hydrated", "gargle with warm salt water"). EVERY such suggestion MUST end with: "Please remember, this is not medical advice. For proper treatment, it is important to consult with a doctor."
 
@@ -517,81 +519,69 @@ Sehat Sahara: [Your response here]"""
             }
         }
 
+
+
     def generate_sehatsahara_response(
         self,
         user_message: str,
         context: Dict[str, Any] = None
     ) -> Optional[str]:
+        """
+        Generates a response from the AI. Returns a valid JSON string on success
+        or None on any failure.
+        """
         if not self.is_available:
             return None
 
         try:
-            # Extract values from context dictionary with defaults
             context = context or {}
-            user_intent = context.get('user_intent', 'general_inquiry')
-            conversation_stage = context.get('conversation_stage', 'understanding')
-            severity_score = context.get('severity_score', 0.5)
-            emotional_state = context.get('emotional_state', 'neutral')
-            urgency_level = context.get('urgency_level', 'low')
             language = context.get('language', 'hi')
-            context_history = context.get('context_history', [])
-            custom_prompt = context.get('custom_prompt')
-
+            
             system_prompt = self.build_system_prompt(
-                intent=user_intent,
-                stage=conversation_stage,
-                severity=severity_score,
-                emotional_state=emotional_state,
-                urgency_level=urgency_level,
+                intent=context.get('user_intent', 'general_inquiry'),
+                stage=context.get('conversation_stage', 'understanding'),
+                severity=0.5,
+                emotional_state='neutral',
+                urgency_level=context.get('urgency_level', 'low'),
                 language=language,
             )
-
-            # Add custom prompt context if provided
-            if custom_prompt:
-                system_prompt = f"{system_prompt}\n\n{custom_prompt}"
 
             messages = self.build_conversation_messages(
                 system_prompt=system_prompt,
                 user_message=user_message,
-                context_history=context_history,
+                context_history=context.get('context_history', []),
             )
 
             response_text = self.client.chat_completion(messages, max_tokens=300, temperature=0.5)
 
-            # Try to parse JSON strictly
-            parsed = None
-            if response_text:
-                json_start = response_text.find("{")
-                json_end = response_text.rfind("}") + 1
-                if json_start >= 0 and json_end > json_start:
-                    json_str = response_text[json_start:json_end]
-                    try:
-                        parsed = json.loads(json_str)
-                    except json.JSONDecodeError:
-                        parsed = None
+            if not response_text:
+                self.logger.warning("AI client returned an empty response.")
+                return None
 
-            if isinstance(parsed, dict) and "response" in parsed and "action" in parsed:
-                # Return compact JSON string
-                return json.dumps(parsed, ensure_ascii=False)
-
-            # Fallback: infer intent and map to action JSON
-            intent_result = self.analyze_user_intent(user_message) or {}
-            fallback = {
-                "response": "I'm here to help with your health needs.",
-                "action": "SHOW_APP_FEATURES",
-                "parameters": {}
-            }
-            return json.dumps(fallback, ensure_ascii=False)
+            # Find the JSON object within the response text
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if not json_match:
+                self.logger.warning(f"AI response did not contain valid JSON. Response: {response_text}")
+                return None
+            
+            json_str = json_match.group(0)
+            
+            # Validate that it's proper JSON and has the required keys
+            try:
+                parsed = json.loads(json_str)
+                if "response" in parsed and "action" in parsed:
+                    # Return the clean, valid JSON string
+                    return json.dumps(parsed, ensure_ascii=False)
+                else:
+                    self.logger.warning(f"AI JSON response was missing required keys 'response' or 'action'.")
+                    return None
+            except json.JSONDecodeError:
+                self.logger.warning(f"Failed to decode JSON from AI response: {json_str}")
+                return None
 
         except Exception as e:
-            self.logger.error(f"Error in Sehat Sahara response generation: {e}")
-            # Last-resort fallback
-            fallback = {
-                "response": "I'm here to help with your health needs.",
-                "action": "SHOW_APP_FEATURES",
-                "parameters": {}
-            }
-            return json.dumps(fallback, ensure_ascii=False)
+            self.logger.error(f"Error in Sehat Sahara response generation: {e}", exc_info=True)
+            return None # Return None on any exception
 
     def build_system_prompt(self, intent: str, stage: str, severity: float, emotional_state: str, urgency_level: str, language: str) -> str:
         intent_guidance = {
