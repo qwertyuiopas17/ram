@@ -49,17 +49,31 @@ class ProgressiveNLUProcessor:
         self.intent_categories = {
             'appointment_booking': {
                 'keywords': [
-                    # English
+                    # English - expanded
                     'book appointment', 'need to see doctor', 'doctor appointment', 'schedule appointment',
                     'meet doctor', 'consultation', 'book doctor', 'see doctor', 'doctor visit',
-                    # Hindi (Latin script)
+                    'make appointment', 'fix appointment', 'get appointment', 'appointment booking',
+                    'want to meet doctor', 'need doctor consultation', 'doctor consultation',
+                    # Hindi (Latin script) - greatly expanded
                     'doctor se milna hai', 'appointment book karni hai', 'doctor ko dikhana hai',
                     'doctor ke paas jana hai', 'appointment chahiye', 'doctor se baat karni hai',
-                    # Punjabi (Latin script)
+                    'appointment banao', 'appointment fix karo', 'doctor se milo', 'doctor ko dikhao',
+                    'appointment karvao', 'doctor appointment chahiye', 'doctor ke paas jao',
+                    'appointment book karo', 'doctor mila do', 'appointment de do',
+                    # Hindi variations with English combinations
+                    'doctor appointment book', 'appointment book hindi', 'doctor se milna book',
+                    'appointment chahiye doctor', 'doctor ko dikhana appointment',
+                    # Punjabi (Latin script) - greatly expanded
                     'doctor nu milna hai', 'appointment book karni hai', 'doctor kol jana hai',
-                    'doctor nu dikhana hai', 'doctor de kol appointment', 'vaid nu milna hai'
+                    'doctor nu dikhana hai', 'doctor de kol appointment', 'vaid nu milna hai',
+                    'appointment banao', 'appointment fix karo', 'doctor nu milo', 'doctor nu dikhao',
+                    'appointment karvao', 'doctor appointment chahida', 'doctor kol jao',
+                    'appointment book karo', 'doctor mila deo', 'appointment de deo',
+                    # Punjabi variations with English combinations
+                    'doctor appointment book', 'appointment book punjabi', 'doctor nu milna book',
+                    'appointment chahida doctor', 'doctor nu dikhana appointment'
                 ],
-                'urgency_indicators': ['urgent', 'emergency', 'turant', 'jaldi', 'emergency hai']
+                'urgency_indicators': ['urgent', 'emergency', 'turant', 'jaldi', 'emergency hai', 'urgent hai']
             },
             'appointment_view': {
                 'keywords': [
@@ -142,26 +156,48 @@ class ProgressiveNLUProcessor:
                 'keywords': [
                     # English
                     'how to take medicine', 'medicine dosage', 'when to take', 'medicine instructions',
-                    'tablet kitni', 'medicine timing', 'prescription details',
-                    # Hindi (Latin script)
+                    'tablet kitni', 'medicine timing', 'prescription details', 'upload prescription',
+                    'view prescription', 'prescription upload', 'show prescription', 'add prescription',
+                    'prescription image', 'doctor prescription', 'medical prescription',
+                    # Hindi (Latin script) - expanded
                     'dawai kaise leni hai', 'kitni tablet leni hai', 'dawai ka time',
-                    'medicine kab leni hai', 'dawai ki jankari',
-                    # Punjabi (Latin script)
+                    'medicine kab leni hai', 'dawai ki jankari', 'dawai upload karo',
+                    'dawai ki parchi upload', 'dawai ki parchi dekho', 'dawai ki parchi',
+                    'doctor ki parchi', 'prescription upload', 'prescription dikhao',
+                    'dawai ki photo', 'dawai ka paper', 'dawai ki slip',
+                    # Punjabi (Latin script) - expanded
                     'dawai kive leni hai', 'kinni tablet leni hai', 'dawai da time',
-                    'medicine kado leni hai', 'dawai di jankari'
+                    'medicine kado leni hai', 'dawai di jankari', 'dawai upload karo',
+                    'dawai di parchi upload', 'dawai di parchi dekho', 'dawai di parchi',
+                    'doctor di parchi', 'prescription upload', 'prescription dikhao',
+                    'dawai di photo', 'dawai da paper', 'dawai di slip'
                 ]
             },
             'medicine_scan': {
                 'keywords': [
-                    # English
+                    # English - expanded
                     'scan medicine', 'check medicine', 'medicine scanner', 'identify medicine',
-                    'what is this medicine', 'medicine name',
-                    # Hindi (Latin script)
+                    'what is this medicine', 'medicine name', 'scan medicine packaging',
+                    'medicine identification', 'scan tablet', 'scan pill', 'medicine scan',
+                    'scan medicine box', 'medicine label scan', 'scan medicine strip',
+                    # Hindi (Latin script) - greatly expanded
                     'medicine scan karo', 'ye kya dawai hai', 'medicine check karo',
-                    'dawai ka naam', 'medicine identify karo',
-                    # Punjabi (Latin script)
+                    'dawai ka naam', 'medicine identify karo', 'dawai scan karo',
+                    'dawai check karo', 'ye kya medicine hai', 'medicine scan karni hai',
+                    'dawai ki scanning', 'medicine ki pehchan', 'dawai identify karo',
+                    'dawai ka naam batao', 'medicine scan karna hai', 'dawai dekhna hai',
+                    # Hindi variations with English combinations
+                    'medicine scan hindi', 'dawai scan english', 'medicine check karna',
+                    'dawai scan karo na', 'medicine scan chahiye', 'dawai scan de do',
+                    # Punjabi (Latin script) - greatly expanded
                     'medicine scan karo', 'eh ki dawai hai', 'medicine check karo',
-                    'dawai da naam', 'medicine identify karo'
+                    'dawai da naam', 'medicine identify karo', 'dawai scan karo',
+                    'dawai check karo', 'eh ki medicine hai', 'medicine scan karni hai',
+                    'dawai di scanning', 'medicine di pehchan', 'dawai identify karo',
+                    'dawai da naam dasso', 'medicine scan karna hai', 'dawai vekhan hai',
+                    # Punjabi variations with English combinations
+                    'medicine scan punjabi', 'dawai scan english', 'medicine check karna',
+                    'dawai scan karo na', 'medicine scan chahida', 'dawai scan de deo'
                 ]
             },
             'emergency_assistance': {
@@ -244,6 +280,22 @@ class ProgressiveNLUProcessor:
                     # Punjabi (Latin script)
                     'reminder set karo', 'dawai da reminder', 'dawai lain da reminder', 'medicine reminder',
                     'dawai da alarm', 'tablet reminder'
+                ]
+            },
+            'prescription_upload': {
+                'keywords': [
+                    # English
+                    'upload prescription', 'add prescription', 'prescription upload', 'scan prescription',
+                    'prescription image', 'doctor prescription', 'medical prescription', 'prescription photo',
+                    'upload doctor prescription', 'add medical prescription', 'prescription scan',
+                    # Hindi (Latin script)
+                    'dawai ki parchi upload', 'parchi upload karo', 'dawai ki parchi', 'doctor ki parchi',
+                    'parchi add karo', 'parchi scan karo', 'dawai ka paper upload', 'dawai ki slip',
+                    'parchi ki photo', 'dawai ki parchi dikhao', 'parchi upload',
+                    # Punjabi (Latin script)
+                    'dawai di parchi upload', 'parchi upload karo', 'dawai di parchi', 'doctor di parchi',
+                    'parchi add karo', 'parchi scan karo', 'dawai da paper upload', 'dawai di slip',
+                    'parchi di photo', 'dawai di parchi dikhao', 'parchi upload'
                 ]
             },
             'out_of_scope': {
@@ -546,6 +598,7 @@ class ProgressiveNLUProcessor:
             'symptom_triage': ['health_assessment', 'guidance'],
             'find_medicine': ['pharmacy_search', 'medicine_availability'],
             'prescription_inquiry': ['information', 'medicine_guidance'],
+            'prescription_upload': ['prescription_management', 'document_upload'],
             'medicine_scan': ['medicine_identification'],
             'emergency_assistance': ['immediate_help', 'emergency_services'],
             'report_issue': ['feedback', 'complaint_handling'],
