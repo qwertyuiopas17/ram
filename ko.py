@@ -140,33 +140,33 @@ class ProgressiveResponseGenerator:
             'symptom_triage': {
                 'en': {
                     'responses': [
-                        "Based on your symptoms, this could be malaria (common in villages) or dengue fever. First aid: rest, drink plenty of fluids, use mosquito nets, avoid self-medication. If high fever (>103°F) or severe symptoms, seek immediate medical help. This is not a diagnosis - please consult a doctor. Would you like me to help book an appointment?",
-                        "Your symptoms suggest possible typhoid fever (common in rural areas) or cholera. Precautions: drink only boiled/filtered water, maintain hygiene, eat light food. For severe diarrhea/vomiting: use ORS solution, seek medical help immediately. This is general information only - consult a doctor for proper diagnosis. Can I help you find a doctor?",
-                        "This might be tuberculosis (TB) or jaundice, which are common in villages. First aid: rest, eat nutritious food, avoid alcohol/smoking. For yellow skin/eyes: seek medical help immediately. Monitor symptoms closely. Remember, I'm not a doctor and cannot diagnose. Please see a qualified medical professional. Would you like to book a consultation?",
-                        "Your symptoms could indicate village-acquired infections like leptospirosis or gastroenteritis. Basic precautions: maintain hygiene, drink clean water, avoid contaminated food. For severe symptoms: rest, hydrate, seek medical attention. This is not medical advice - please consult a healthcare professional. Can I help you find a doctor?"
+                        "I understand you're experiencing symptoms. Let me help you assess this properly. First, can you tell me: How long have you been feeling this way? Is the symptom constant or does it come and go? This will help me guide you better. Remember, I'm not a doctor and cannot diagnose - I can only provide general guidance and help you book an appointment with a qualified healthcare professional.",
+                        "Thank you for sharing your symptoms. To provide better guidance, I need to understand more: When did this start? How severe is it on a scale of 1-10? Are there any other symptoms you're experiencing? This information will help me suggest appropriate next steps while keeping you safe.",
+                        "I hear you're not feeling well. Let me ask a few questions to understand better: How long have these symptoms been going on? Have they been getting worse, staying the same, or improving? Any other symptoms like fever, headache, or nausea? Remember, this is general guidance only - please consult a doctor for proper medical advice.",
+                        "I want to help you understand your symptoms better. Can you tell me: How long ago did this start? Is it getting better or worse? Are you experiencing any other symptoms along with this? This will help me provide more targeted guidance and ensure you get the right care."
                     ],
-                    'action': 'NAVIGATE_TO_APPOINTMENT_BOOKING',
-                    'parameters': {'reason': 'symptom_assessment'}
+                    'action': 'CONTINUE_CONVERSATION',
+                    'parameters': {'reason': 'symptom_assessment', 'next_action': 'ask_followup_questions'}
                 },
                 'hi': {
                     'responses': [
-                        "Aapke symptoms ke basis par ye malaria (gaon mein common) ya dengue fever ho sakti hai. First aid: rest kariye, paani jyada piyiye, mosquito net use kariye, khud dawai avoid kariye. Agar high fever (>103°F) ya severe symptoms ho to turant medical help lijiye. Yeh diagnosis nahi hai - doctor se consult kariye. Kya main appointment book karne mein madad karun?",
-                        "Aapke symptoms se typhoid fever (rural areas mein common) ya cholera ka shak hai. Precautions: sirf boiled/filtered water piyiye, hygiene maintain kariye, halka khana khaiye. Severe diarrhea/vomiting ke liye: ORS solution use kariye, turant medical help lijiye. Yeh sirf general information hai - proper diagnosis ke liye doctor se milen. Kya main doctor dhundne mein madad karun?",
-                        "Ye tuberculosis (TB) ya jaundice ho sakti hai, jo gaon mein common hai. First aid: rest kariye, nutritious food khaiye, alcohol/smoking avoid kariye. Yellow skin/eyes ke liye: turant medical help lijiye. Symptoms ko closely monitor kariye. Yaad rakhein, main doctor nahi hoon aur diagnose nahi kar sakti. Qualified medical professional se consult kariye. Kya consultation book karna chahenge?",
-                        "Aapke symptoms se village-acquired infections jaise leptospirosis ya gastroenteritis ka pata chalta hai. Basic precautions: hygiene maintain kariye, clean water piyiye, contaminated food avoid kariye. Severe symptoms ke liye: rest kariye, hydrate rahiye, medical attention lijiye. Yeh medical advice nahi hai - healthcare professional se consult kariye. Kya main doctor dhundne mein madad karun?"
+                        "Main samajhti hoon ki aapko takleef ho rahi hai. Sahi madad karne ke liye mujhe thoda aur jaanne ki zaroorat hai. Bataiye: Yeh takleef kab se ho rahi hai? Yeh lagatar hai ya kabhi-kabhi hoti hai? Yaad rakhein, main doctor nahi hoon - bas general guidance de sakti hoon aur doctor se milne mein madad kar sakti hoon.",
+                        "Aapke symptoms ke baare mein dhanyavaad. Behtar samajhne ke liye kuch sawal: Yeh kab shuru hua? Kitni takleef hai 1 se 10 tak? Kya aur koi symptoms hain jaise bukhar, sir dard, ya ulti? Yeh information doctor ko milne mein madad karegi.",
+                        "Mujhe dukh hai ki aap theek nahi lag rahe. Thoda aur bataiye: Yeh kitne dino se ho raha hai? Badhta ja raha hai, same hai, ya kam ho raha hai? Kya bukhar, sir dard, ya ulti bhi ho rahi hai? Main general guidance de sakti hoon par doctor se zaroor milen.",
+                        "Aapki takleef ko behtar samajhne ke liye: Yeh kab shuru hua tha? Yeh badh raha hai ya kam? Kya aur symptoms hain? Yeh madad karegi ki main aapko sahi direction de sakun, par yaad rakhein main doctor nahi hoon."
                     ],
-                    'action': 'NAVIGATE_TO_APPOINTMENT_BOOKING',
-                    'parameters': {'reason': 'symptom_assessment'}
+                    'action': 'CONTINUE_CONVERSATION',
+                    'parameters': {'reason': 'symptom_assessment', 'next_action': 'ask_followup_questions'}
                 },
                 'pa': {
                     'responses': [
-                        "Tuhade symptoms de basis te eh malaria (gaon vich common) ya dengue fever ho sakdi hai. First aid: rest karo, paani jyada piyo, mosquito net use karo, khud dawai avoid karo. Agar high fever (>103°F) ya severe symptoms ho to turant medical help lo. Eh diagnosis nahi hai - doctor naal consult karo. Ki main appointment book karan vich madad karan?",
-                        "Tuhade symptoms ton typhoid fever (rural areas vich common) ya cholera ka shak hai. Precautions: sirf boiled/filtered water piyo, hygiene maintain karo, halka khana khao. Severe diarrhea/vomiting layi: ORS solution use karo, turant medical help lo. Eh sirf general information hai - proper diagnosis layi doctor naal milo. Ki main doctor labhan vich madad karan?",
-                        "Eh tuberculosis (TB) ya jaundice ho sakdi hai, jo gaon vich common hai. First aid: rest karo, nutritious food khao, alcohol/smoking avoid karo. Yellow skin/eyes layi: turant medical help lo. Symptoms nu closely monitor karo. Yaad rakhna, main doctor nahi haan te diagnose nahi kar sakdi. Qualified medical professional naal consult karo. Ki consultation book karna chahoge?",
-                        "Tuhade symptoms ton village-acquired infections jaise leptospirosis ya gastroenteritis ka pata chalda hai. Basic precautions: hygiene maintain karo, clean water piyo, contaminated food avoid karo. Severe symptoms layi: rest karo, hydrate raho, medical attention lo. Eh medical advice nahi hai - healthcare professional naal consult karo. Ki main doctor labhan vich madad karan?"
+                        "Main samajhti haan ki tuhanu takleef ho rahi hai. Sahi madad karan layi mujhe thoda aur jaanne di zaroorat hai. Dassiye: Yeh takleef kado se ho rahi hai? Yeh lagatar hai ya kabhi-kabhi hoti hai? Yaad rakhna, main doctor nahi haan - bas general guidance de sakdi haan aur doctor naal milan vich madad kar sakdi haan.",
+                        "Tuhade symptoms de baare mein dhanyavaad. Behtar samajhan layi kuch sawal: Yeh kado shuru hua? Kitni takleef hai 1 ton 10 tak? Ki aur koi symptoms hain jaise bukhar, sir dukh, ya ulti? Yeh information doctor ko milan vich madad karegi.",
+                        "Mujhe dukh hai ki tusi theek nahi lag rahe. Thoda aur dassiye: Yeh kinne dino se ho raha hai? Badhta ja raha hai, same hai, ya kam ho raha hai? Ki bukhar, sir dukh, ya ulti bhi ho rahi hai? Main general guidance de sakdi haan par doctor naal zaroor milo.",
+                        "Tuhadi takleef ko behtar samajhan layi: Yeh kado shuru hua tha? Yeh badh raha hai ya kam? Ki aur symptoms hain? Yeh madad karegi ki main tuhanu sahi direction de sakun, par yaad rakhna main doctor nahi haan."
                     ],
-                    'action': 'NAVIGATE_TO_APPOINTMENT_BOOKING',
-                    'parameters': {'reason': 'symptom_assessment'}
+                    'action': 'CONTINUE_CONVERSATION',
+                    'parameters': {'reason': 'symptom_assessment', 'next_action': 'ask_followup_questions'}
                 }
             },
             'find_medicine': {

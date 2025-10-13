@@ -269,6 +269,7 @@ class SehatSaharaApiClient:
         self.client = ApiClient(api_keys=[api_key] if api_key else None, base_url=base_url, model=model)
         self.is_available = self.client.is_available
         self.logger = logging.getLogger(__name__)
+
         self.base_system_prompt = """You are 'Sehat Sahara', a friendly and empathetic AI health assistant for rural patients in Punjab. Your communication must be simple, clear, and available in Punjabi (pa), Hindi (hi), and English (en).
 
 Primary Role:
@@ -608,6 +609,9 @@ Sehat Sahara: [Your response here]"""
             "prescription_summary_request": "Provide clear summary of user's prescription and medications. Explain doctor's instructions in simple terms.",
             "prescription_upload": "Help user upload prescription image. Guide them to use camera to capture prescription.",
             "general_inquiry": "Briefly introduce capabilities and show features. Be friendly and welcoming.",
+            "how_to_appointment_booking": "Provide step-by-step guidance for booking appointments, then show the booking button. Use green styled message for guidance.",
+            "how_to_medicine_scan": "Provide step-by-step guidance for scanning medicine, then show the scan button. Use green styled message for guidance.",
+            "how_to_prescription_upload": "Provide step-by-step guidance for uploading prescriptions, then show the upload button. Use green styled message for guidance.",
             "out_of_scope": "Politely redirect to health-related topics or offer to connect to human support.",
             "set_medicine_reminder": "Start a multi-step conversation to set a medicine reminder. Ask questions one at a time."
         }

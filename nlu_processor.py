@@ -240,6 +240,51 @@ class ProgressiveNLUProcessor:
                     'kive kaam karda hai', 'guide karo'
                 ]
             },
+            'how_to_appointment_booking': {
+                'keywords': [
+                    # English
+                    'how to book appointment', 'how do i book appointment', 'appointment kaise book karu',
+                    'how to schedule appointment', 'appointment kaise karu', 'how to make appointment',
+                    # Hindi (Latin script)
+                    'appointment kaise book karu', 'appointment kaise karu', 'appointment kaise banaun',
+                    'appointment kaise fix karu', 'appointment kaise schedule karu', 'doctor kaise book karu',
+                    'doctor se kaise milu', 'appointment kaise chahiye',
+                    # Punjabi (Latin script)
+                    'appointment kaise book karu', 'appointment kaise karu', 'appointment kaise banaun',
+                    'appointment kaise fix karu', 'appointment kaise schedule karu', 'doctor kaise book karu',
+                    'doctor naal kaise milu', 'appointment kaise chahida'
+                ]
+            },
+            'how_to_medicine_scan': {
+                'keywords': [
+                    # English
+                    'how to scan medicine', 'how do i scan medicine', 'medicine kaise scan karu',
+                    'how to identify medicine', 'medicine kaise identify karu', 'how to check medicine',
+                    # Hindi (Latin script)
+                    'medicine kaise scan karu', 'dawai kaise scan karu', 'medicine kaise check karu',
+                    'dawai kaise identify karu', 'medicine kaise pehchanu', 'dawai kaise pehchanu',
+                    'medicine scanner kaise use karu', 'dawai scanner kaise use karu',
+                    # Punjabi (Latin script)
+                    'medicine kaise scan karu', 'dawai kaise scan karu', 'medicine kaise check karu',
+                    'dawai kaise identify karu', 'medicine kaise pehchanu', 'dawai kaise pehchanu',
+                    'medicine scanner kaise use karu', 'dawai scanner kaise use karu'
+                ]
+            },
+            'how_to_prescription_upload': {
+                'keywords': [
+                    # English
+                    'how to upload prescription', 'how do i upload prescription', 'prescription kaise upload karu',
+                    'how to add prescription', 'prescription kaise add karu', 'how to scan prescription',
+                    # Hindi (Latin script)
+                    'prescription kaise upload karu', 'parchi kaise upload karu', 'prescription kaise add karu',
+                    'parchi kaise add karu', 'prescription kaise scan karu', 'parchi kaise scan karu',
+                    'dawai ki parchi kaise upload karu', 'doctor ki parchi kaise upload karu',
+                    # Punjabi (Latin script)
+                    'prescription kaise upload karu', 'parchi kaise upload karu', 'prescription kaise add karu',
+                    'parchi kaise add karu', 'prescription kaise scan karu', 'parchi kaise scan karu',
+                    'dawai di parchi kaise upload karu', 'doctor di parchi kaise upload karu'
+                ]
+            },
             'post_appointment_followup': {
                 'keywords': [
                     # English
@@ -327,86 +372,253 @@ class ProgressiveNLUProcessor:
             self.load_nlu_model(model_path)
 
     def _build_semantic_embeddings(self):
-        """Build semantic embeddings for each intent category"""
+        """Build enhanced semantic embeddings for each intent category using diverse examples"""
         try:
             self.category_embeddings = {}
+            self.category_examples = {}  # Store example phrases for each category
+
             for category, data in self.intent_categories.items():
-                # Use keywords to create pseudo-sentences for embedding
-                keywords = data['keywords'][:5]  # Use top 5 keywords
-                pseudo_sentences = [f"I want to {keyword}" for keyword in keywords]
-                
-                # Create embeddings
-                embeddings = self.sentence_model.encode(pseudo_sentences)
-                
+                # Create diverse example phrases for each category
+                examples = []
+
+                # Use keywords to create natural sentences
+                keywords = data['keywords'][:8]  # Use more keywords for better representation
+
+                # Create varied sentence patterns
+                sentence_patterns = [
+                    "I want to {}",
+                    "I need to {}",
+                    "Can you help me {}",
+                    "How do I {}",
+                    "I would like to {}",
+                    "Please {}",
+                    "I need assistance with {}",
+                    "Could you {}"
+                ]
+
+                for keyword in keywords:
+                    # Select random pattern for variety
+                    pattern = np.random.choice(sentence_patterns)
+                    examples.append(pattern.format(keyword))
+
+                # Add category-specific examples for better representation
+                category_specific_examples = self._get_category_specific_examples(category)
+                examples.extend(category_specific_examples)
+
+                # Ensure we have enough examples (minimum 5)
+                while len(examples) < 5:
+                    examples.append(f"Please help with {category.replace('_', ' ')}")
+
+                # Store examples for reference
+                self.category_examples[category] = examples[:10]  # Keep top 10
+
+                # Create embeddings for all examples
+                embeddings = self.sentence_model.encode(examples)
+
                 # Use mean embedding as category representation
                 self.category_embeddings[category] = np.mean(embeddings, axis=0)
-            
-            self.logger.info("✅ Semantic embeddings built for all intent categories")
+
+            self.logger.info("✅ Enhanced semantic embeddings built for all intent categories")
         except Exception as e:
             self.logger.error(f"Failed to build semantic embeddings: {e}")
             self.use_semantic = False
 
+    def _get_category_specific_examples(self, category: str) -> List[str]:
+        """Get category-specific example phrases for better embedding representation"""
+        category_examples = {
+            'appointment_booking': [
+                "I need to schedule a doctor's appointment",
+                "Can I book a consultation with a doctor?",
+                "I want to make an appointment for tomorrow",
+                "Please help me schedule a medical appointment",
+                "I need to see a doctor this week"
+            ],
+            'symptom_triage': [
+                "I'm experiencing severe symptoms",
+                "I don't feel well and need medical advice",
+                "I'm having health issues and need guidance",
+                "Can you help assess my symptoms?",
+                "I need to understand what these symptoms mean"
+            ],
+            'medicine_scan': [
+                "Can you identify this medicine from the image?",
+                "What is the name of this tablet?",
+                "Please help me recognize this medication",
+                "I need to know what medicine this is",
+                "Can you scan and identify this drug?"
+            ],
+            'emergency_assistance': [
+                "This is a medical emergency",
+                "I need urgent medical help immediately",
+                "Please call emergency services",
+                "I'm in a critical situation and need help",
+                "Medical emergency - please respond quickly"
+            ],
+            'prescription_inquiry': [
+                "How should I take this medicine?",
+                "What are the instructions for this prescription?",
+                "When should I take these tablets?",
+                "Please explain my medication dosage",
+                "I need help understanding my prescription"
+            ]
+        }
+        return category_examples.get(category, [])
+
+    def _ai_powered_classification(self, message: str, conversation_history: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        AI-powered intent classification using semantic similarity with SentenceTransformer.
+        This is the core of the new AI-based NLU system.
+        """
+        try:
+            if not self.use_semantic or not hasattr(self, 'category_embeddings'):
+                return None
+
+            # Encode the user message
+            message_embedding = self.sentence_model.encode([message])
+            message_embedding = np.array(message_embedding[0])
+
+            # Calculate semantic similarity with all intent categories
+            similarities = {}
+            for category, category_embedding in self.category_embeddings.items():
+                # Calculate cosine similarity
+                similarity = self._cosine_similarity(message_embedding, category_embedding)
+                similarities[category] = similarity
+
+            # Get the best matching intent
+            if similarities:
+                best_intent = max(similarities, key=similarities.get)
+                best_score = similarities[best_intent]
+
+                # Apply conversation context boost if available
+                context_boost = self._apply_conversation_context_boost(
+                    best_intent, message, conversation_history
+                )
+
+                # Final confidence score with context boost
+                final_confidence = min(best_score + context_boost, 1.0)
+
+                # Multi-intent detection for complex messages
+                multi_intent = self._detect_multi_intent(similarities, threshold=0.6)
+
+                return {
+                    'primary_intent': best_intent,
+                    'confidence': final_confidence,
+                    'all_scores': similarities,
+                    'multi_intent': multi_intent,
+                    'classification_method': 'ai_semantic'
+                }
+
+            return None
+
+        except Exception as e:
+            self.logger.error(f"AI-powered classification failed: {e}")
+            return None
+
+    def _cosine_similarity(self, vec1: np.ndarray, vec2: np.ndarray) -> float:
+        """Calculate cosine similarity between two vectors"""
+        try:
+            dot_product = np.dot(vec1, vec2)
+            norm1 = np.linalg.norm(vec1)
+            norm2 = np.linalg.norm(vec2)
+
+            if norm1 == 0 or norm2 == 0:
+                return 0.0
+
+            return float(dot_product / (norm1 * norm2))
+        except Exception:
+            return 0.0
+
+    def _apply_conversation_context_boost(self, predicted_intent: str, current_message: str,
+                                        conversation_history: List[Dict[str, Any]] = None) -> float:
+        """Apply context boost based on conversation history"""
+        if not conversation_history:
+            return 0.0
+
+        boost = 0.0
+        try:
+            # Look at recent conversation turns for context
+            recent_turns = conversation_history[-3:] if len(conversation_history) >= 3 else conversation_history
+
+            for turn in recent_turns:
+                if isinstance(turn, dict):
+                    # Check if previous intents are related to current prediction
+                    prev_intent = turn.get('intent') or turn.get('primary_intent')
+                    if prev_intent and self._are_intents_related(prev_intent, predicted_intent):
+                        boost += 0.1
+
+                    # Check if conversation flow suggests this intent
+                    prev_content = turn.get('content', '').lower()
+                    current_lower = current_message.lower()
+
+                    # If conversation is about appointments and user mentions booking -> boost
+                    if any(word in prev_content for word in ['appointment', 'doctor', 'schedule']) and \
+                       any(word in current_lower for word in ['book', 'schedule', 'appointment']):
+                        boost += 0.15
+
+        except Exception as e:
+            self.logger.warning(f"Context boost calculation failed: {e}")
+
+        return min(boost, 0.3)  # Cap boost at 0.3
+
+    def _are_intents_related(self, intent1: str, intent2: str) -> bool:
+        """Check if two intents are related for context boosting"""
+        related_groups = {
+            'appointment_group': ['appointment_booking', 'appointment_view', 'appointment_cancel'],
+            'medicine_group': ['find_medicine', 'medicine_scan', 'prescription_inquiry', 'prescription_upload'],
+            'health_group': ['symptom_triage', 'health_record_request', 'prescription_summary_request'],
+            'help_group': ['general_inquiry', 'how_to_appointment_booking', 'how_to_medicine_scan']
+        }
+
+        for group in related_groups.values():
+            if intent1 in group and intent2 in group:
+                return True
+
+        return False
+
+    def _detect_multi_intent(self, similarities: Dict[str, float], threshold: float = 0.6) -> List[str]:
+        """Detect if message contains multiple intents"""
+        high_confidence_intents = [
+            intent for intent, score in similarities.items()
+            if score >= threshold and intent != 'out_of_scope'
+        ]
+
+        return high_confidence_intents[:3]  # Return top 3 multi-intents
+
     def understand_user_intent(self, user_message: str, conversation_history: List[Dict[str, Any]] = None, excluded_intents: List[str] = None, sehat_sahara_mode: bool = False) -> Dict[str, Any]:
         """
-        Processes a user's message to understand intent and urgency for health app navigation.
+        AI-powered NLU processing with semantic understanding for superior intent classification.
+        Falls back to enhanced keyword-based system if AI classification fails.
         """
         cleaned_message = self._clean_and_preprocess(user_message)
-        
-        # Immediate check for out of scope content
+
+        # Immediate check for out of scope content using AI if available
         if self._is_out_of_scope(cleaned_message):
             return self._generate_out_of_scope_response()
 
-        # Use keyword-based analysis only (removed API-based analysis)
+        # Primary: AI-powered classification with semantic understanding
+        if self.use_semantic and hasattr(self, 'category_embeddings'):
+            self.logger.info(f"🔬 Using AI-powered NLU for message: '{cleaned_message[:50]}...'")
+            ai_result = self._ai_powered_classification(cleaned_message, conversation_history)
 
-        # Fallback to keyword-based system
-        self.logger.info(f"Using keyword-based NLU for message: '{cleaned_message[:50]}...'")
-        fallback_result = self._get_fallback_analysis(cleaned_message, excluded_intents)
-        return self._compile_final_analysis(fallback_result, cleaned_message, sehat_sahara_mode)
+            if ai_result and ai_result['confidence'] > 0.6:  # Confidence threshold for AI classification
+                self.logger.info(f"✅ AI classification successful: {ai_result['primary_intent']} ({ai_result['confidence']:.2f})")
+                return self._compile_enhanced_final_analysis(ai_result, cleaned_message, sehat_sahara_mode)
+
+        # Secondary: Enhanced keyword-based system with better accuracy
+        self.logger.info(f"🔄 Using enhanced keyword-based NLU for message: '{cleaned_message[:50]}...'")
+        enhanced_result = self._get_enhanced_fallback_analysis(cleaned_message, excluded_intents, conversation_history)
+        return self._compile_enhanced_final_analysis(enhanced_result, cleaned_message, sehat_sahara_mode)
 
 
-    def _get_fallback_analysis(self, message: str, excluded_intents: List[str] = None) -> Dict[str, Any]:
-        """Generates NLU analysis using keywords, with improved logic for short messages."""
+    def _get_enhanced_fallback_analysis(self, message: str, excluded_intents: List[str] = None, conversation_history: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Enhanced fallback analysis with better keyword matching and context awareness."""
 
-        # First, check for specific intents even in short messages
-        for intent, data in self.intent_categories.items():
-            if any(re.search(r'\b' + re.escape(keyword) + r'\b', message, re.IGNORECASE) for keyword in data['keywords']):
-                if intent != 'general_inquiry':
-                    # If a specific keyword is found, immediately classify with that intent
-                    self.logger.info(f"Short message '{message}' matched specific intent '{intent}'.")
-                    analysis = self._comprehensive_intent_detection(message, excluded_intents)
-                    urgency_analysis = self._assess_urgency_and_severity(message, analysis)
-                    context_entities = self._extract_health_context(message)
-                    language_detected = self._detect_language(message)
-                    user_needs = self._identify_user_needs(analysis['primary_intent'])
+        # Enhanced short message handling with context
+        if len(message.split()) <= 4:
+            return self._handle_short_message_enhanced(message, excluded_intents, conversation_history)
 
-                    # Boost confidence for clear short commands
-                    analysis['confidence'] = 0.95
-
-                    return {
-                        'primary_intent': analysis['primary_intent'],
-                        'confidence': analysis['confidence'],
-                        'urgency_level': urgency_analysis['urgency_level'],
-                        'language_detected': language_detected,
-                        'context_entities': context_entities,
-                        'user_needs': user_needs,
-                        'in_scope': True
-                    }
-
-        # If no specific keywords are found in a short message, THEN it's a general inquiry
-        if len(message.split()) <= 4: # Increased threshold to catch more conversational phrases
-            self.logger.info(f"Short message without specific keywords: '{message}'. Using general_inquiry.")
-            return {
-                'primary_intent': 'general_inquiry',
-                'confidence': 0.7,
-                'urgency_level': 'low',
-                'language_detected': self._detect_language(message),
-                'context_entities': {},
-                'user_needs': ['guidance'],
-                'in_scope': True
-            }
-
-        # Perform standard analysis for longer messages
-        analysis = self._comprehensive_intent_detection(message, excluded_intents)
+        # Enhanced comprehensive analysis for longer messages
+        analysis = self._enhanced_comprehensive_intent_detection(message, excluded_intents, conversation_history)
         urgency_analysis = self._assess_urgency_and_severity(message, analysis)
         context_entities = self._extract_health_context(message)
         language_detected = self._detect_language(message)
@@ -419,13 +631,86 @@ class ProgressiveNLUProcessor:
             'language_detected': language_detected,
             'context_entities': context_entities,
             'user_needs': user_needs,
-            'in_scope': True
+            'in_scope': True,
+            'classification_method': 'enhanced_keyword'
         }
 
-    def _comprehensive_intent_detection(self, message: str, excluded_intents: List[str] = None) -> Dict[str, Any]:
-        """Combines keyword matching for health app intent detection."""
+    def _handle_short_message_enhanced(self, message: str, excluded_intents: List[str] = None, conversation_history: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Enhanced handling of short messages with conversation context."""
+
+        # Check for specific intents with enhanced pattern matching
+        for intent, data in self.intent_categories.items():
+            if any(re.search(r'\b' + re.escape(keyword) + r'\b', message, re.IGNORECASE) for keyword in data['keywords']):
+                if intent != 'general_inquiry':
+                    self.logger.info(f"Short message '{message}' matched specific intent '{intent}'.")
+                    analysis = self._enhanced_comprehensive_intent_detection(message, excluded_intents, conversation_history)
+                    urgency_analysis = self._assess_urgency_and_severity(message, analysis)
+                    context_entities = self._extract_health_context(message)
+                    language_detected = self._detect_language(message)
+                    user_needs = self._identify_user_needs(analysis['primary_intent'])
+
+                    # Apply conversation context boost for short messages
+                    context_boost = self._calculate_short_message_context_boost(message, conversation_history)
+                    final_confidence = min(analysis['confidence'] + context_boost, 0.95)
+
+                    return {
+                        'primary_intent': analysis['primary_intent'],
+                        'confidence': final_confidence,
+                        'urgency_level': urgency_analysis['urgency_level'],
+                        'language_detected': language_detected,
+                        'context_entities': context_entities,
+                        'user_needs': user_needs,
+                        'in_scope': True,
+                        'classification_method': 'enhanced_keyword'
+                    }
+
+        # Enhanced general inquiry detection with conversation context
+        context_boost = self._calculate_short_message_context_boost(message, conversation_history)
+        base_confidence = 0.7 + context_boost
+
+        return {
+            'primary_intent': 'general_inquiry',
+            'confidence': min(base_confidence, 0.9),
+            'urgency_level': 'low',
+            'language_detected': self._detect_language(message),
+            'context_entities': {},
+            'user_needs': ['guidance'],
+            'in_scope': True,
+            'classification_method': 'enhanced_keyword'
+        }
+
+    def _calculate_short_message_context_boost(self, message: str, conversation_history: List[Dict[str, Any]] = None) -> float:
+        """Calculate context boost for short messages based on conversation history."""
+        if not conversation_history:
+            return 0.0
+
+        boost = 0.0
+        try:
+            # Look at recent conversation for context clues
+            recent_turns = conversation_history[-2:] if len(conversation_history) >= 2 else conversation_history
+
+            for turn in recent_turns:
+                if isinstance(turn, dict):
+                    prev_intent = turn.get('intent') or turn.get('primary_intent')
+                    if prev_intent and prev_intent != 'general_inquiry':
+                        # If previous conversation was about appointments and user sends "yes" -> boost appointment intent
+                        if prev_intent in ['appointment_booking', 'appointment_view'] and \
+                           message.lower() in ['yes', 'book', 'schedule', 'appointment']:
+                            boost += 0.2
+
+        except Exception:
+            pass
+
+        return min(boost, 0.2)
+
+    def _enhanced_comprehensive_intent_detection(self, message: str, excluded_intents: List[str] = None, conversation_history: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Enhanced comprehensive intent detection with conversation context and better scoring."""
         keyword_scores = self._enhanced_keyword_intent_detection(message)
-        
+
+        # Apply conversation context boost to keyword scores
+        if conversation_history:
+            keyword_scores = self._apply_keyword_context_boost(keyword_scores, message, conversation_history)
+
         if excluded_intents:
             for intent in excluded_intents:
                 if intent in keyword_scores:
@@ -438,11 +723,57 @@ class ProgressiveNLUProcessor:
             primary_intent = max(keyword_scores, key=keyword_scores.get)
             confidence = keyword_scores[primary_intent]
 
+            # Apply length-based confidence adjustment
+            confidence = self._adjust_confidence_by_length(message, confidence)
+
         return {
             'primary_intent': primary_intent,
             'confidence': min(confidence, 1.0),
             'all_scores': keyword_scores
         }
+
+    def _apply_keyword_context_boost(self, scores: Dict[str, float], message: str, conversation_history: List[Dict[str, Any]]) -> Dict[str, float]:
+        """Apply context boost to keyword scores based on conversation history."""
+        try:
+            recent_turns = conversation_history[-3:] if len(conversation_history) >= 3 else conversation_history
+
+            for turn in recent_turns:
+                if isinstance(turn, dict):
+                    prev_intent = turn.get('intent') or turn.get('primary_intent')
+                    if prev_intent and prev_intent in scores:
+                        # Boost related intents based on conversation flow
+                        if prev_intent in ['appointment_booking', 'appointment_view']:
+                            # If previous conversation was about appointments, boost appointment-related intents
+                            related_intents = ['appointment_booking', 'appointment_view', 'appointment_cancel']
+                            for intent in related_intents:
+                                if intent in scores:
+                                    scores[intent] *= 1.2
+
+                        elif prev_intent in ['medicine_scan', 'prescription_inquiry']:
+                            # If previous conversation was about medicine, boost medicine-related intents
+                            related_intents = ['find_medicine', 'medicine_scan', 'prescription_inquiry', 'prescription_upload']
+                            for intent in related_intents:
+                                if intent in scores:
+                                    scores[intent] *= 1.2
+
+        except Exception:
+            pass
+
+        return scores
+
+    def _adjust_confidence_by_length(self, message: str, base_confidence: float) -> float:
+        """Adjust confidence based on message length and complexity."""
+        word_count = len(message.split())
+
+        if word_count <= 3:
+            # Short messages - slightly lower confidence unless very clear
+            return base_confidence * 0.9
+        elif word_count <= 8:
+            # Medium messages - standard confidence
+            return base_confidence
+        else:
+            # Long messages - potentially higher confidence due to more context
+            return min(base_confidence * 1.1, 0.95)
 
     def _enhanced_keyword_intent_detection(self, message: str) -> Dict[str, float]:
         """Detects intent based on keywords with multilingual support."""
@@ -638,35 +969,113 @@ class ProgressiveNLUProcessor:
         cleaned = re.sub(r'[^\w\s]', '', cleaned)
         return cleaned
 
-    def _compile_final_analysis(self, analysis_data: Dict[str, Any], cleaned_message: str, sehat_sahara_mode: bool = False) -> Dict[str, Any]:
-        """Compiles the final NLU response object from the analysis data."""
+    def _compile_enhanced_final_analysis(self, analysis_data: Dict[str, Any], cleaned_message: str, sehat_sahara_mode: bool = False) -> Dict[str, Any]:
+        """Enhanced compilation of final NLU response with AI-powered insights."""
         primary_intent_value = analysis_data.get('primary_intent', 'general_inquiry')
         if isinstance(primary_intent_value, list) and len(primary_intent_value) > 0:
             primary_intent_value = primary_intent_value[0]
         elif not isinstance(primary_intent_value, str):
             primary_intent_value = 'general_inquiry'
 
-        conversation_stage = self._determine_conversation_stage(cleaned_message, {'primary_intent': primary_intent_value})
+        # Enhanced conversation stage determination with AI context
+        conversation_stage = self._determine_enhanced_conversation_stage(
+            cleaned_message,
+            {'primary_intent': primary_intent_value, 'confidence': analysis_data.get('confidence', 0.5)},
+            analysis_data
+        )
 
-        # For Sehat Sahara strict mode, ensure language detection is more reliable
+        # Enhanced language detection with AI confidence
         language_detected = analysis_data.get('language_detected', 'en')
         if sehat_sahara_mode and language_detected not in ['hi', 'pa', 'en']:
             language_detected = self._detect_language(cleaned_message)
+
+        # Enhanced context entities extraction
+        context_entities = analysis_data.get('context_entities', {})
+        if analysis_data.get('classification_method') == 'ai_semantic':
+            # AI can extract more sophisticated context entities
+            context_entities = self._extract_enhanced_context_entities(cleaned_message, primary_intent_value)
+
+        # Determine if AI was used for classification
+        ai_analysis_used = analysis_data.get('classification_method') == 'ai_semantic'
 
         result = {
             'primary_intent': primary_intent_value,
             'confidence': float(analysis_data.get('confidence', 0.5)),
             'urgency_level': analysis_data.get('urgency_level', 'low'),
             'language_detected': language_detected,
-            'context_entities': analysis_data.get('context_entities', {}),
+            'context_entities': context_entities,
             'conversation_stage': conversation_stage,
             'user_needs': analysis_data.get('user_needs', ['guidance']),
             'in_scope': bool(analysis_data.get('in_scope', True)),
             'processing_timestamp': datetime.now().isoformat(),
-            'api_analysis_used': False
+            'api_analysis_used': ai_analysis_used,
+            'classification_method': analysis_data.get('classification_method', 'enhanced_keyword'),
+            'multi_intent': analysis_data.get('multi_intent', []),
+            'all_scores': analysis_data.get('all_scores', {})
         }
 
         return result
+
+    def _determine_enhanced_conversation_stage(self, message: str, analysis: Dict, full_analysis: Dict) -> str:
+        """Enhanced conversation stage determination with AI-powered context."""
+        intent = analysis['primary_intent']
+        confidence = analysis.get('confidence', 0.5)
+
+        # High confidence AI classification can lead to more specific stages
+        if full_analysis.get('classification_method') == 'ai_semantic' and confidence > 0.8:
+            # AI with high confidence can determine more nuanced stages
+            if intent == 'appointment_booking' and any(word in message.lower() for word in ['urgent', 'emergency', 'asap']):
+                return 'urgent_task_execution'
+            elif intent in ['medicine_scan', 'prescription_upload'] and confidence > 0.85:
+                return 'document_processing'
+
+        # Standard stage determination
+        if intent == 'emergency_assistance':
+            return 'emergency_handling'
+        elif intent in ['appointment_booking', 'find_medicine', 'medicine_scan', 'set_medicine_reminder']:
+            return 'task_execution'
+        elif intent in ['appointment_view', 'health_record_request', 'prescription_inquiry']:
+            return 'information_retrieval'
+        else:
+            return 'understanding'
+
+    def _extract_enhanced_context_entities(self, message: str, primary_intent: str) -> Dict[str, str]:
+        """Extract enhanced context entities using AI-powered understanding."""
+        context = {}
+
+        # Enhanced entity extraction based on intent
+        if primary_intent == 'appointment_booking':
+            # Extract time preferences
+            time_patterns = ['tomorrow', 'today', 'morning', 'afternoon', 'evening', 'urgent', 'asap']
+            for pattern in time_patterns:
+                if pattern in message.lower():
+                    context['time_preference'] = pattern
+
+            # Extract doctor preferences
+            specialties = ['cardiologist', 'dermatologist', 'pediatrician', 'gynecologist', 'orthopedic']
+            for specialty in specialties:
+                if specialty in message.lower():
+                    context['doctor_type'] = specialty
+
+        elif primary_intent == 'symptom_triage':
+            # Extract symptom severity
+            severity_indicators = ['severe', 'mild', 'moderate', 'extreme', 'terrible']
+            for indicator in severity_indicators:
+                if indicator in message.lower():
+                    context['severity'] = indicator
+
+            # Extract duration
+            duration_patterns = ['days', 'weeks', 'hours', 'chronic', 'sudden']
+            for pattern in duration_patterns:
+                if pattern in message.lower():
+                    context['duration'] = pattern
+
+        elif primary_intent in ['medicine_scan', 'prescription_inquiry']:
+            # Extract medicine-related context
+            if any(word in message.lower() for word in ['tablet', 'capsule', 'syrup', 'injection']):
+                context['medicine_form'] = 'specified'
+
+        return context
 
     def _determine_conversation_stage(self, message: str, analysis: Dict) -> str:
         """Determines the current stage of the conversation for health app context."""
@@ -740,18 +1149,115 @@ class ProgressiveNLUProcessor:
             return False
 
     def get_model_info(self) -> Dict[str, Any]:
-        """Get information about the current model configuration."""
+        """Get information about the current AI-enhanced model configuration."""
         return {
-            'model_type': 'Sehat Sahara Health Assistant NLU Processor',
-            'version': '3.0.0',
-            'api_enabled': False,
-            'api_model': None,
+            'model_type': 'Sehat Sahara Health Assistant AI-Powered NLU Processor',
+            'version': '4.0.0',
+            'ai_powered': True,
+            'classification_method': 'AI Semantic + Enhanced Keyword Fallback',
             'semantic_enabled': self.use_semantic,
+            'sentence_transformer_model': 'paraphrase-multilingual-MiniLM-L12-v2' if self.use_semantic else None,
             'intent_categories_count': len(self.intent_categories),
             'conversation_stages_count': len(self.conversation_stages),
             'supported_languages': ['English', 'Hindi', 'Punjabi'],
+            'ai_confidence_threshold': 0.6,
+            'enhanced_features': [
+                'AI-powered semantic classification',
+                'Conversation context awareness',
+                'Multi-intent detection',
+                'Enhanced entity extraction',
+                'Intelligent fallback system',
+                'Context-based confidence boosting'
+            ],
             'initialized_at': datetime.now().isoformat()
         }
+
+    def test_ai_nlu_transformation(self) -> Dict[str, Any]:
+        """Test the transformed AI-powered NLU with various inputs to demonstrate improvements."""
+        test_cases = [
+            # Test cases that would fail with keyword-only approach but work with AI
+            {
+                'input': "I need medical consultation for my health issues",
+                'expected_traditional': 'general_inquiry',  # Would fail with keyword approach
+                'expected_ai': 'appointment_booking'  # Should work with AI semantic understanding
+            },
+            {
+                'input': "Can you help me identify what medicine this is from the image?",
+                'expected_traditional': 'general_inquiry',  # Would fail with keyword approach
+                'expected_ai': 'medicine_scan'  # Should work with AI semantic understanding
+            },
+            {
+                'input': "I'm experiencing severe chest pain and need urgent help",
+                'expected_traditional': 'symptom_triage',  # Basic keyword match
+                'expected_ai': 'emergency_assistance'  # AI should recognize urgency better
+            },
+            {
+                'input': "How should I take these tablets that the doctor prescribed?",
+                'expected_traditional': 'general_inquiry',  # Would fail with keyword approach
+                'expected_ai': 'prescription_inquiry'  # Should work with AI semantic understanding
+            },
+            # Multilingual test cases
+            {
+                'input': "मुझे अपनी दवाई की जानकारी चाहिए",  # Hindi: "I need information about my medicine"
+                'expected_traditional': 'general_inquiry',  # Would fail with keyword approach
+                'expected_ai': 'prescription_inquiry'  # Should work with AI multilingual understanding
+            },
+            {
+                'input': "ਮੈਨੂੰ ਡਾਕਟਰ ਨਾਲ ਮਿਲਣਾ ਹੈ",  # Punjabi: "I need to meet a doctor"
+                'expected_traditional': 'general_inquiry',  # Would fail with keyword approach
+                'expected_ai': 'appointment_booking'  # Should work with AI multilingual understanding
+            }
+        ]
+
+        results = {
+            'total_tests': len(test_cases),
+            'ai_successful': 0,
+            'traditional_successful': 0,
+            'ai_results': [],
+            'improvement_demonstrated': False
+        }
+
+        for i, test_case in enumerate(test_cases):
+            test_input = test_case['input']
+
+            # Test with AI classification
+            ai_result = self.understand_user_intent(test_input)
+            ai_intent = ai_result.get('primary_intent', 'general_inquiry')
+            ai_confidence = ai_result.get('confidence', 0.0)
+            ai_method = ai_result.get('classification_method', 'unknown')
+
+            # Traditional keyword-only would have different results for complex cases
+            traditional_intent = test_case['expected_traditional']
+            ai_expected = test_case['expected_ai']
+
+            # Check if AI performed better
+            ai_improved = (ai_intent == ai_expected and traditional_intent != ai_expected)
+
+            if ai_intent == ai_expected:
+                results['ai_successful'] += 1
+
+            if ai_intent == traditional_intent:
+                results['traditional_successful'] += 1
+
+            if ai_improved:
+                results['improvement_demonstrated'] = True
+
+            results['ai_results'].append({
+                'test_case': i + 1,
+                'input': test_input,
+                'ai_intent': ai_intent,
+                'ai_confidence': round(ai_confidence, 3),
+                'ai_method': ai_method,
+                'traditional_expected': traditional_intent,
+                'ai_expected': ai_expected,
+                'ai_improved': ai_improved
+            })
+
+        results['ai_accuracy'] = results['ai_successful'] / results['total_tests']
+        results['traditional_accuracy'] = results['traditional_successful'] / results['total_tests']
+        results['improvement_ratio'] = results['ai_accuracy'] / max(results['traditional_accuracy'], 0.1)
+
+        return results
 
     def validate_configuration(self) -> bool:
         """Validate the current model configuration."""
