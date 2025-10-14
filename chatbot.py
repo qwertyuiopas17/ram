@@ -1036,6 +1036,22 @@ def predict():
         )
         detected_language_code = nlu_understanding.get('language_detected', 'en')
 
+        # Inject live doctor data if the AI is in the booking flow
+        history_turns = conversation_memory.get_conversation_context(current_user.patient_id, turns=1)
+        if history_turns:
+            try:
+                last_bot_response = json.loads(history_turns[0].get('bot_response', '{}'))
+                if last_bot_response.get('action') == 'CONVERSATIONAL_BOOKING' and last_bot_response.get('parameters', {}).get('step') == 'ask_specialty':
+                    specialty = user_message # The user's reply is the specialty
+                    doctors = Doctor.query.filter(Doctor.specialization.ilike(f'%{specialty}%'), Doctor.is_active==True).all()
+                    if doctors:
+                        doctor_list = "\\n".join([f"{i+1}. Dr. {doc.full_name}" for i, doc in enumerate(doctors)])
+                        user_message = f"CONTEXT: The user chose '{specialty}'. The available doctors are:\\n{doctor_list}\\nNOW, ask the user to choose one by name."
+                    else:
+                        user_message = f"CONTEXT: The user chose '{specialty}', but no doctors were found. Apologize and ask them to choose another specialty."
+            except (json.JSONDecodeError, AttributeError):
+                pass # Not in a special state
+
         # --- EMERGENCY HANDLING ---
         is_emergency = (nlu_understanding.get('primary_intent') == 'emergency_assistance') or \
                        (nlu_understanding.get('urgency_level') == 'emergency')
