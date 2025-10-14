@@ -1115,6 +1115,218 @@ def predict():
             "error": True
         }), 500
 
+@app.route("/v1/conversational-booking", methods=["POST"])
+def conversational_booking():
+    """
+    Conversational appointment booking using the same data as the website's booking system.
+    This integrates with the existing appointment booking functionality.
+    """
+    try:
+        update_system_state('conversational_booking')
+        data = request.get_json() or {}
+
+        # User authentication (same as existing book-doctor endpoint)
+        user = get_current_user()
+        if not user:
+            user_id_param = data.get("userId")
+            if user_id_param:
+                user = User.query.filter_by(patient_id=user_id_param).first()
+            if not user:
+                return jsonify({"success": False, "message": "Authentication required or user not found"}), 401
+
+        action = data.get("action", "start")
+        booking_context = data.get("bookingContext", {})
+
+        # Use the same booking data structure as the website (from patient.html appData.booking)
+        website_booking_data = {
+            "categories": ["General Physician", "Child Specialist", "Dermatologist"],
+            "doctors": {
+                "General Physician": [
+                    {"id": 1, "name": "Anjali Verma", "languages": "Hindi, English", "img": "https://placehold.co/100x100/0d9488/FFFFFF?text=AV", "specialization": "General Physician"},
+                    {"id": 2, "name": "Sameer Patel", "languages": "Gujarati, Hindi", "img": "https://placehold.co/100x100/3b82f6/FFFFFF?text=SP", "specialization": "General Physician"}
+                ],
+                "Child Specialist": [
+                    {"id": 3, "name": "Priya Sharma", "languages": "English, Hindi", "img": "https://placehold.co/100x100/ec4899/FFFFFF?text=PS", "specialization": "Child Specialist"}
+                ],
+                "Dermatologist": [
+                    {"id": 4, "name": "Rajesh Kumar", "languages": "Bengali, Hindi", "img": "https://placehold.co/100x100/8b5cf6/FFFFFF?text=RK", "specialization": "Dermatologist"}
+                ]
+            },
+            "slots": ["10:00 AM", "11:30 AM", "02:00 PM", "04:30 PM"],
+            "modes": ["Video Call", "Audio Call", "Photo-based"]
+        }
+
+        if action == "start":
+            # Start booking process - show doctor categories (same as website)
+            return jsonify({
+                "success": True,
+                "response": "Sure, I can help you with that. What kind of doctor would you like to book?",
+                "action": "SELECT_DOCTOR_TYPE",
+                "parameters": {
+                    "available_types": website_booking_data["categories"],
+                    "next_step": "select_doctor"
+                },
+                "interactive_buttons": [
+                    {"type": "doctor_type_selection", "text": category, "action": "SELECT_TYPE", "parameters": {"type": category}}
+                    for category in website_booking_data["categories"]
+                ]
+            })
+
+        elif action == "select_doctor":
+            # User selected doctor type - show available doctors from same data as website
+            doctor_type = data.get("doctorType")
+            if not doctor_type:
+                return jsonify({"success": False, "message": "Doctor type is required"})
+
+            # Get doctors from the same data structure as the website
+            available_doctors = website_booking_data["doctors"].get(doctor_type, [])
+
+            if not available_doctors:
+                return jsonify({
+                    "success": False,
+                    "response": f"I'm sorry, but no {doctor_type} doctors are currently available. Would you like to try a different specialty?",
+                    "action": "RETRY_TYPE_SELECTION",
+                    "parameters": {"requested_type": doctor_type}
+                })
+
+            return jsonify({
+                "success": True,
+                "response": f"Great! I've found {len(available_doctors)} {doctor_type} doctors available. Please select your preferred doctor:",
+                "action": "SELECT_DOCTOR",
+                "parameters": {
+                    "doctor_type": doctor_type,
+                    "available_doctors": available_doctors,
+                    "next_step": "select_datetime"
+                },
+                "interactive_buttons": [
+                    {"type": "doctor_selection", "text": f"Dr. {doctor['name']}", "action": "SELECT_DOCTOR", "parameters": {"doctorId": doctor['id'], "doctorName": doctor['name']}}
+                    for doctor in available_doctors
+                ]
+            })
+
+        elif action == "select_datetime":
+            # User selected doctor - show available time slots (same as website)
+            doctor_id = data.get("doctorId")
+            if not doctor_id:
+                return jsonify({"success": False, "message": "Doctor ID is required"})
+
+            # Find the selected doctor from the website data
+            selected_doctor = None
+            for category_doctors in website_booking_data["doctors"].values():
+                for doctor in category_doctors:
+                    if str(doctor['id']) == str(doctor_id):
+                        selected_doctor = doctor
+                        break
+                if selected_doctor:
+                    break
+
+            if not selected_doctor:
+                return jsonify({"success": False, "message": "Selected doctor not found"})
+
+            # Generate available time slots (same logic as website)
+            available_slots = []
+            for i in range(1, 8):  # Next 7 days
+                date = datetime.now() + timedelta(days=i)
+                if date.weekday() < 6:  # Monday to Saturday
+                    for slot in website_booking_data["slots"]:
+                        # Parse time slot and create datetime
+                        slot_time = datetime.strptime(slot, '%I:%M %p')
+                        slot_datetime = date.replace(hour=slot_time.hour, minute=slot_time.minute, second=0, microsecond=0)
+                        available_slots.append({
+                            "date": slot_datetime.strftime('%Y-%m-%d'),
+                            "time": slot,
+                            "datetime": slot_datetime.isoformat()
+                        })
+
+            return jsonify({
+                "success": True,
+                "response": f"Excellent choice! Dr. {selected_doctor['name']} is available. Please select a convenient date and time:",
+                "action": "SELECT_DATETIME",
+                "parameters": {
+                    "doctor_id": doctor_id,
+                    "doctor_name": selected_doctor['name'],
+                    "available_slots": available_slots[:12],
+                    "next_step": "confirm_booking"
+                },
+                "interactive_buttons": [
+                    {"type": "datetime_selection", "text": f"{slot['date']} at {slot['time']}", "action": "SELECT_DATETIME", "parameters": {"datetime": slot['datetime'], "doctorId": doctor_id}}
+                    for slot in available_slots[:6]
+                ]
+            })
+
+        elif action == "confirm_booking":
+            # Final confirmation and booking using existing book-doctor endpoint
+            appointment_datetime = data.get("appointmentDatetime")
+            doctor_id = data.get("doctorId")
+
+            if not appointment_datetime or not doctor_id:
+                return jsonify({"success": False, "message": "Appointment datetime and doctor ID are required"})
+
+            try:
+                # Find the doctor in the database (same lookup as existing endpoint)
+                doctor = Doctor.query.filter(
+                    (Doctor.doctor_id == doctor_id) | (Doctor.id == doctor_id)
+                ).first()
+
+                if not doctor:
+                    return jsonify({"success": False, "message": "Doctor not found"})
+
+                # Parse datetime (same format as existing endpoint expects)
+                when = datetime.fromisoformat(appointment_datetime)
+
+                # Use the existing book-doctor endpoint logic to create the appointment
+                # This ensures consistency with website bookings
+                appt = Appointment(
+                    user_id=user.id,
+                    doctor_id=doctor.id,
+                    appointment_datetime=when,
+                    appointment_type=booking_context.get('doctor_type', 'consultation'),
+                    chief_complaint=booking_context.get('chief_complaint', 'General consultation')
+                )
+                db.session.add(appt)
+                db.session.commit()
+
+                update_system_state('conversational_booking', appointments_booked=1)
+
+                logger.info(f"✅ Conversational appointment booked: {appt.appointment_id} for user {user.patient_id}")
+
+                return jsonify({
+                    "success": True,
+                    "response": f"Perfect! I've successfully booked your appointment with Dr. {doctor.full_name} on {when.strftime('%B %d, %Y')} at {when.strftime('%I:%M %p')}. You will receive a confirmation message shortly.",
+                    "action": "BOOKING_CONFIRMED",
+                    "parameters": {
+                        "appointment_id": appt.appointment_id,
+                        "doctor_name": doctor.full_name,
+                        "datetime": when.isoformat() + "Z",
+                        "appointment_type": appt.appointment_type
+                    },
+                    "appointment": {
+                        "appointmentId": appt.appointment_id,
+                        "doctor": {
+                            "id": doctor.doctor_id,
+                            "name": doctor.full_name,
+                            "specialization": doctor.specialization
+                        },
+                        "datetime": when.isoformat() + "Z",
+                        "type": appt.appointment_type,
+                        "status": appt.status
+                    }
+                })
+
+            except Exception as e:
+                logger.error(f"Error creating conversational appointment: {e}")
+                db.session.rollback()
+                return jsonify({"success": False, "message": "Failed to create appointment"})
+
+        else:
+            return jsonify({"success": False, "message": "Invalid action"})
+
+    except Exception as e:
+        logger.error(f"Conversational booking error: {e}")
+        logger.error(traceback.format_exc())
+        update_system_state('conversational_booking', success=False)
+        return jsonify({"success": False, "message": "Failed to process booking request"}), 500
+
 @app.route("/v1/book-doctor", methods=["POST"])
 def book_doctor():
     try:
@@ -1123,8 +1335,8 @@ def book_doctor():
 
         # --- CORRECTED LOGIC ---
         # First, try to get the user from the active session
-        user = get_current_user() 
-        
+        user = get_current_user()
+
         # If no user is found in the session, fall back to the userId from the request
         if not user:
             user_id_param = data.get("userId")

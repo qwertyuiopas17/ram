@@ -422,7 +422,7 @@ Sehat Sahara: [Your response here]"""
         try:
             context = context or {}
             language = context.get('language', 'hi')
-            
+
             system_prompt = self.build_system_prompt(
                 intent=context.get('user_intent', 'general_inquiry'),
                 stage=context.get('conversation_stage', 'understanding'),
@@ -444,30 +444,104 @@ Sehat Sahara: [Your response here]"""
                 self.logger.warning("AI client returned an empty response.")
                 return None
 
-            # Find the JSON object within the response text
-            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-            if not json_match:
-                self.logger.warning(f"AI response did not contain valid JSON. Response: {response_text}")
+            # Enhanced JSON extraction and validation
+            json_str = self._extract_and_validate_json(response_text)
+
+            if not json_str:
+                self.logger.warning(f"AI response did not contain valid JSON after multiple attempts. Response: {response_text}")
                 return None
-            
-            json_str = json_match.group(0)
-            
+
             # Validate that it's proper JSON and has the required keys
             try:
                 parsed = json.loads(json_str)
                 if "response" in parsed and "action" in parsed:
+                    # Ensure interactive_buttons is always an array
+                    if "interactive_buttons" not in parsed:
+                        parsed["interactive_buttons"] = []
+
                     # Return the clean, valid JSON string
                     return json.dumps(parsed, ensure_ascii=False)
                 else:
                     self.logger.warning(f"AI JSON response was missing required keys 'response' or 'action'.")
                     return None
-            except json.JSONDecodeError:
-                self.logger.warning(f"Failed to decode JSON from AI response: {json_str}")
+            except json.JSONDecodeError as e:
+                self.logger.warning(f"Failed to decode JSON from AI response: {json_str}. Error: {e}")
                 return None
 
         except Exception as e:
             self.logger.error(f"Error in Sehat Sahara response generation: {e}", exc_info=True)
             return None # Return None on any exception
+
+    def _extract_and_validate_json(self, response_text: str) -> Optional[str]:
+        """
+        Enhanced JSON extraction with multiple fallback strategies.
+        """
+        if not response_text:
+            return None
+
+        # Strategy 1: Direct JSON parsing
+        try:
+            parsed = json.loads(response_text.strip())
+            if isinstance(parsed, dict) and "response" in parsed and "action" in parsed:
+                return json.dumps(parsed, ensure_ascii=False)
+        except json.JSONDecodeError:
+            pass
+
+        # Strategy 2: Extract JSON from markdown code blocks
+        json_patterns = [
+            r'```json\s*(\{.*?\})\s*```',  # ```json {...}```
+            r'```\s*(\{.*?\})\s*```',      # ``` {...}```
+            r'`(\{.*?\})`',                # `{...}`
+        ]
+
+        for pattern in json_patterns:
+            matches = re.findall(pattern, response_text, re.DOTALL)
+            for match in matches:
+                try:
+                    parsed = json.loads(match.strip())
+                    if isinstance(parsed, dict) and "response" in parsed and "action" in parsed:
+                        return json.dumps(parsed, ensure_ascii=False)
+                except json.JSONDecodeError:
+                    continue
+
+        # Strategy 3: Find first complete JSON object
+        json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(0)
+            try:
+                parsed = json.loads(json_str)
+                if isinstance(parsed, dict) and "response" in parsed and "action" in parsed:
+                    return json.dumps(parsed, ensure_ascii=False)
+            except json.JSONDecodeError:
+                pass
+
+        # Strategy 4: Try to fix common JSON issues
+        cleaned_text = response_text.strip()
+
+        # Remove common prefixes
+        prefixes_to_remove = [
+            "Here's the JSON response:",
+            "Response:",
+            "Assistant:",
+            "AI:",
+            "JSON:",
+        ]
+
+        for prefix in prefixes_to_remove:
+            if cleaned_text.startswith(prefix):
+                cleaned_text = cleaned_text[len(prefix):].strip()
+
+        # Try to fix trailing commas
+        cleaned_text = re.sub(r',(\s*[}\]])', r'\1', cleaned_text)
+
+        try:
+            parsed = json.loads(cleaned_text)
+            if isinstance(parsed, dict) and "response" in parsed and "action" in parsed:
+                return json.dumps(parsed, ensure_ascii=False)
+        except json.JSONDecodeError:
+            pass
+
+        return None
 
     def build_system_prompt(self, intent: str, stage: str, severity: float, emotional_state: str, urgency_level: str, language: str) -> str:
         intent_guidance = {
