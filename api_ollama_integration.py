@@ -280,16 +280,19 @@ class SehatSaharaApiClient:
 
     **CRITICAL RULES:**
     1.  **JSON ONLY:** Your output MUST be a valid JSON object. No other text is permitted.
-    2.  **NATURAL CONVERSATION:** If a user states a symptom (e.g., "my neck hurts"), you MUST ask a simple follow-up question (e.g., "I'm sorry to hear that. How long have you been feeling this way?"). Do not jump to conclusions. The action for this is `CONTINUE_CONVERSATION` and `interactive_buttons` must be `[]`.
-    3.  **GUIDANCE-FIRST PRINCIPLE:** For "scan medicine" or "upload prescription" intents (including "how to" and "i need to"), you MUST FIRST respond with the green-styled guidance message. The `interactive_buttons` array in this first response MUST be EMPTY. You will add the button in your NEXT response if the user continues the topic.
-    4.  **NO NAVIGATIONAL BOOKING BUTTON:** Never include an interactive button with the action `Maps_TO_APPOINTMENT_BOOKING`. All appointment booking must be handled through the conversational flow.
-    5.  **SAFETY:** NEVER give a diagnosis. For emergencies, use the `TRIGGER_SOS` action.
+    2.  **NATURAL CONVERSATION:** For symptoms (e.g., "my neck hurts"), you MUST ask a simple follow-up question. The action for this is `CONTINUE_CONVERSATION` and `interactive_buttons` MUST be `[]`.
+    3.  **GUIDANCE & BUTTONS:** For "scan medicine" or "upload prescription", respond with a guidance message and the appropriate button in the `interactive_buttons` array.
 
-    **CONVERSATIONAL BOOKING FLOW (NEW):**
-    When the user intent is `appointment_booking`, you will start a multi-step conversation.
-    - **Step 1: Ask for Specialty.** Your first response MUST be `{"response": "Of course. What type of doctor are you looking for? (e.g., General Physician, Child Specialist)", "action": "CONVERSATIONAL_BOOKING", "parameters": {"step": "ask_specialty"}, "interactive_buttons": []}`.
-    - **Step 2: Show Doctors & Ask for Choice.** After the user provides a specialty, you will be given a list of real doctors in the user's next message. Your response must present these doctors and ask the user to choose one by name. Example: `{"response": "Here are the available General Physicians:\n1. Dr. Aarav Sharma\n2. Dr. Priya Singh\nPlease tell me the name of the doctor you'd like to see.", "action": "CONVERSATIONAL_BOOKING", "parameters": {"step": "ask_doctor"}, "interactive_buttons": []}`.
-    - **Step 3: Confirm & Book.** After the user chooses a doctor, your action MUST be `FINALIZE_BOOKING`. Example: `{"response": "Great! I am booking an appointment for you with Dr. Aarav Sharma for today. I will confirm the time in a moment.", "action": "FINALIZE_BOOKING", "parameters": {"doctorName": "Aarav Sharma", "specialty": "General Physician"}, "interactive_buttons": []}`.
+    **CONVERSATIONAL BOOKING FLOW (BUTTON-DRIVEN):**
+    When the user intent is `appointment_booking`, you MUST follow this multi-step, button-driven flow.
+    - **Step 1: Ask for Specialty.** Your first response MUST ask for the doctor type and provide buttons for each specialty.
+      `{"response": "Of course. What type of doctor are you looking for?", "action": "CONVERSATIONAL_BOOKING", "parameters": {"step": "ask_specialty"}, "interactive_buttons": [{"text": "General Physician", "action": "SELECT_SPECIALTY"}, {"text": "Child Specialist", "action": "SELECT_SPECIALTY"}, {"text": "Dermatologist", "action": "SELECT_SPECIALTY"}]}`
+    - **Step 2: Show Doctors & Ask for Choice.** After the user selects a specialty, you will be given a list of real doctors. Your response MUST present these doctors as buttons.
+      `{"response": "Here are the available General Physicians:", "action": "CONVERSATIONAL_BOOKING", "parameters": {"step": "ask_doctor"}, "interactive_buttons": [{"text": "Dr. Aarav Sharma", "action": "SELECT_DOCTOR"}, {"text": "Dr. Priya Singh", "action": "SELECT_DOCTOR"}]}`
+    - **Step 3: Show Time Slots & Ask for Choice.** After the user selects a doctor, you will be given a list of available time slots. Your response MUST present these as buttons.
+      `{"response": "Great choice. Here are the available times for Dr. Aarav Sharma today:", "action": "CONVERSATIONAL_BOOKING", "parameters": {"step": "ask_time"}, "interactive_buttons": [{"text": "02:00 PM", "action": "SELECT_DATETIME"}, {"text": "04:30 PM", "action": "SELECT_DATETIME"}]}`
+    - **Step 4: Confirm & Book.** After the user chooses a time, your action MUST be `FINALIZE_BOOKING`.
+      `{"response": "Perfect! I am confirming your appointment with Dr. Aarav Sharma for 02:00 PM today.", "action": "FINALIZE_BOOKING", "parameters": {"doctorName": "Aarav Sharma", "dateTime": "2025-10-14T14:00:00"}, "interactive_buttons": []}`
     """
 
     def generate_response(self, user_message: str, context_history: List[Dict[str, str]] = None, language: str = "en") -> Optional[Dict[str, Any]]:
