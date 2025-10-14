@@ -986,6 +986,7 @@ def get_prescription_summary():
 
 # In chatbot.py
 
+
 @app.route("/v1/predict", methods=["POST"])
 def predict():
     """
@@ -1012,93 +1013,201 @@ def predict():
         if not current_user:
             return jsonify({"error": "User not found.", "login_required": True}), 401
 
-            # --- START OF MODIFICATIONS ---
-            nlu_understanding = nlu_processor.understand_user_intent(
-                user_message,
-                conversation_history=[],
-                sehat_sahara_mode=True
+        # --- START OF MODIFICATIONS ---
+        # NLU understand user intent
+        nlu_understanding = nlu_processor.understand_user_intent(
+            user_message,
+            conversation_history=[],
+            sehat_sahara_mode=True
+        )
+
+        # Inject live data into the AI's context during the booking flow
+        history_turns = conversation_memory.get_conversation_context(current_user.patient_id, turns=1)
+        if history_turns:
+            try:
+                last_bot_response = json.loads(history_turns[0].get('bot_response', '{}'))
+                bot_action = last_bot_response.get('action')
+                bot_step = last_bot_response.get('parameters', {}).get('step')
+
+                if bot_action == 'CONVERSATIONAL_BOOKING':
+                    if bot_step == 'ask_specialty':
+                        # The user's reply is the specialty
+                        specialty = user_message
+                        doctors = Doctor.query.filter(
+                            Doctor.specialization.ilike(f'%{specialty}%'),
+                            Doctor.is_active == True
+                        ).all()
+                        if doctors:
+                            doctor_buttons = ', '.join([
+                                f'{{"text": "Dr. {doc.full_name}", "action": "SELECT_DOCTOR"}}'
+                                for doc in doctors
+                            ])
+                            user_message = (
+                                f"CONTEXT: The user chose '{specialty}'. NOW, ask the user to choose one of the "
+                                f"following doctors by showing these buttons: [{doctor_buttons}]"
+                            )
+                        else:
+                            user_message = ("CONTEXT: The user chose a specialty with no available doctors. "
+                                            "Apologize and ask them to choose another from the main list.")
+                    elif bot_step == 'ask_doctor':
+                        # The user's reply is the doctor name
+                        doctor_name = user_message.replace("Dr. ", "").strip()
+                        # Generate next 4 available 30-min slots
+                        slots = []
+                        start_time_dt = datetime.now().replace(second=0, microsecond=0)
+                        if start_time_dt.minute < 30:
+                            start_time_dt = start_time_dt.replace(minute=30)
+                        else:
+                            start_time_dt = (start_time_dt + timedelta(hours=1)).replace(minute=0)
+
+                        for i in range(4):
+                            slot_time = start_time_dt + timedelta(minutes=30 * i)
+                            slots.append({
+                                "text": slot_time.strftime('%I:%M %p'),
+                                "action": "SELECT_DATETIME",
+                                "iso": slot_time.isoformat()
+                            })
+
+                        time_buttons = ', '.join([
+                            f'{{"text": "{s["text"]}", "action": "SELECT_DATETIME", "parameters": {{"dateTimeISO": "{s["iso"]}"}}}}'
+                            for s in slots
+                        ])
+                        user_message = (
+                            f"CONTEXT: The user chose '{doctor_name}'. NOW, ask the user to choose a time slot by "
+                            f"showing these buttons: [{time_buttons}]"
+                        )
+            except (json.JSONDecodeError, AttributeError):
+                pass
+
+        # Emergency handling protocol (keep existing behavior)
+
+        action_payload = None
+
+        # --- AI-DRIVEN RESPONSE GENERATION ---
+        if sehat_sahara_client and sehat_sahara_client.is_available:
+            context = {
+                "user_intent": nlu_understanding.get('primary_intent'),
+                "conversation_stage": nlu_understanding.get('conversation_stage'),
+                "urgency_level": nlu_understanding.get('urgency_level', 'low'),
+                "language": nlu_understanding.get('language_detected', 'en'),
+                "context_history": []
+            }
+            action_payload_str = sehat_sahara_client.generate_sehatsahara_response(
+                user_message=user_message,
+                context=context
             )
 
-            # Inject live data into the AI's context during the booking flow
-            history_turns = conversation_memory.get_conversation_context(current_user.patient_id, turns=1)
-            if history_turns:
+            if action_payload_str:
                 try:
-                    last_bot_response = json.loads(history_turns[0].get('bot_response', '{}'))
-                    bot_action = last_bot_response.get('action')
-                    bot_step = last_bot_response.get('parameters', {}).get('step')
+                    action_payload = json.loads(action_payload_str)
 
-                    if bot_action == 'CONVERSATIONAL_BOOKING':
-                        if bot_step == 'ask_specialty':
-                            # The user's reply is the specialty
-                            specialty = user_message
-                            doctors = Doctor.query.filter(Doctor.specialization.ilike(f'%{specialty}%'), Doctor.is_active==True).all()
-                            if doctors:
-                                doctor_buttons = ', '.join([f'{{"text": "Dr. {doc.full_name}", "action": "SELECT_DOCTOR"}}' for doc in doctors])
-                                user_message = f"CONTEXT: The user chose '{specialty}'. NOW, ask the user to choose one of the following doctors by showing these buttons: [{doctor_buttons}]"
-                            else:
-                                user_message = "CONTEXT: The user chose a specialty with no available doctors. Apologize and ask them to choose another from the main list."
-                        elif bot_step == 'ask_doctor':
-                            # The user's reply is the doctor name
-                            doctor_name = user_message.replace("Dr. ", "").strip()
-                            # Generate next 4 available 30-min slots
-                            slots = []
-                            start_time = datetime.now().replace(second=0, microsecond=0)
-                            if start_time.minute < 30: start_time = start_time.replace(minute=30)
-                            else: start_time = (start_time + timedelta(hours=1)).replace(minute=0)
-                            for i in range(4):
-                                slot_time = start_time + timedelta(minutes=30 * i)
-                                slots.append({"text": slot_time.strftime('%I:%M %p'), "action": "SELECT_DATETIME", "iso": slot_time.isoformat()})
+                    # When AI says to finalize booking, persist in DB
+                    if action_payload.get("action") == "FINALIZE_BOOKING":
+                        params = action_payload.get("parameters", {})
+                        doctor_name = params.get("doctorName")
+                        dt_str = params.get("dateTimeISO")  # Use ISO from button
 
-                            time_buttons = ', '.join([f'{{"text": "{s["text"]}", "action": "SELECT_DATETIME", "parameters": {{"dateTimeISO": "{s["iso"]}"}}}}' for s in slots])
-                            user_message = f"CONTEXT: The user chose '{doctor_name}'. NOW, ask the user to choose a time slot by showing these buttons: [{time_buttons}]"
-                except (json.JSONDecodeError, AttributeError): pass
+                        doctor = Doctor.query.filter(Doctor.full_name.ilike(f'%{doctor_name}%')).first()
+                        if doctor and dt_str:
+                            appt_time = datetime.fromisoformat(dt_str)
+                            new_appt = Appointment(
+                                user_id=current_user.id,
+                                doctor_id=doctor.id,
+                                appointment_datetime=appt_time,
+                                status='confirmed'
+                            )
+                            db.session.add(new_appt)
+                            db.session.commit()
+                            action_payload['response'] = (
+                                f"Your appointment with Dr. {doctor.full_name} is confirmed for "
+                                f"{appt_time.strftime('%I:%M %p')} today. You can view it in the appointments section."
+                            )
+                            action_payload['action'] = 'BOOKING_SUCCESS'
+                        else:
+                            action_payload['response'] = "I'm sorry, there was an error booking that. Let's try again."
+                            action_payload['action'] = 'BOOKING_FAILED'
+                except json.JSONDecodeError:
+                    action_payload = None
 
-            # ... (keep existing emergency handling logic)
+        # In chatbot.py, inside the /v1/predict function
 
-            # --- AI-DRIVEN RESPONSE GENERATION (inside the 'else' block) ---
-            if sehat_sahara_client and sehat_sahara_client.is_available:
-                # ... (context building remains the same)
-                context = {
-                    "user_intent": nlu_understanding.get('primary_intent'),
-                    "conversation_stage": nlu_understanding.get('conversation_stage'),
-                    "urgency_level": nlu_understanding.get('urgency_level', 'low'),
-                    "language": nlu_understanding.get('language_detected', 'en'),
-                    "context_history": []
+        # Fallback to existing local generator if needed
+        if not action_payload:
+            # This log message is from your original code and is helpful
+            logger.warning(f"AI failed or unavailable. Using local fallback for intent: {nlu_understanding.get('primary_intent')}")
+            update_system_state('predict', fallback_responses=1)
+            try:
+                if response_generator:
+                    # The response from generate_response is a dictionary
+                    local_response_dict = response_generator.generate_response(
+                        user_message=user_message,
+                        nlu_result=nlu_understanding, # Use the full NLU result
+                        user_context={'user_id': current_user.patient_id},
+                        conversation_history=conversation_memory.get_conversation_context(current_user.patient_id, turns=5)
+                    )
+                    
+                    # --- THIS IS THE FIX ---
+                    # Ensure the 'intent' key is added to the dictionary from the fallback
+                    if 'intent' not in local_response_dict:
+                         local_response_dict['intent'] = nlu_understanding.get('primary_intent')
+
+                    # Add interactive_buttons if they are missing from the fallback
+                    if 'interactive_buttons' not in local_response_dict:
+                        local_response_dict['interactive_buttons'] = []
+                    
+                    action_payload = local_response_dict # Keep it as a dictionary for now
+                    # --- END OF FIX ---
+
+                else:
+                    # Minimal fallback if the generator itself fails
+                    action_payload = {
+                        "response": "I'm having trouble. Please try rephrasing.",
+                        "action": "SHOW_APP_FEATURES", "parameters": {}, "interactive_buttons": [],
+                        "intent": nlu_understanding.get('primary_intent')
+                    }
+            except Exception as fallback_error:
+                logger.error(f"Error in fallback response generation: {fallback_error}")
+                action_payload = {
+                    "response": "I'm experiencing technical difficulties. Please try again later.",
+                    "action": "SHOW_APP_FEATURES", "parameters": {}, "interactive_buttons": [],
+                    "intent": "general_inquiry"
                 }
-                action_payload_str = sehat_sahara_client.generate_sehatsahara_response(
-                    user_message=user_message,
-                    context=context
-                )
+                update_system_state('predict', success=False)
+        
+        # Now, ensure the intent is in the final payload before converting to JSON
+        if 'intent' not in action_payload:
+            action_payload['intent'] = nlu_understanding.get('primary_intent')
+            
+        # The final payload is now a dictionary, convert it to a JSON string for logging/storage
+        action_payload_str = json.dumps(action_payload)
 
-                if action_payload_str:
-                    try:
-                        action_payload = json.loads(action_payload_str)
+        # Persist conversation and return JSON
+        response_data = action_payload # Return the dictionary directly
 
-                        if action_payload.get("action") == "FINALIZE_BOOKING":
-                            params = action_payload.get("parameters", {})
-                            doctor_name = params.get("doctorName")
-                            dt_str = params.get("dateTimeISO") # Use the ISO string from the button
+        # Save the JSON string to the database
+        if conversation_memory:
+            conversation_memory.add_conversation_turn(
+                user_id=current_user.patient_id,
+                user_message=data.get("message"),
+                bot_response=action_payload_str,
+                # ... rest of the parameters
+            
+        # ... rest of the function
+                detected_intent=nlu_understanding.get('primary_intent'),
+                intent_confidence=nlu_understanding.get('primary_intent_confidence'),
+                language_detected=nlu_understanding.get('language_detected'),
+                urgency_level=nlu_understanding.get('urgency_level'),
+                action_triggered=response_data.get('action'),
+                action_parameters=json.dumps(response_data.get('parameters')),
+                context_entities=json.dumps(nlu_understanding.get('context_entities'))
+            )
+        
+        # Update system state and log response time
+        response_time = time.time() - start_time
+        logger.info(f"User {current_user.patient_id} processed in {response_time:.2f}s")
+        update_system_state('predict', success=True)
 
-                            doctor = Doctor.query.filter(Doctor.full_name.ilike(f'%{doctor_name}%')).first()
-                            if doctor and dt_str:
-                                appt_time = datetime.fromisoformat(dt_str)
-                                new_appt = Appointment(user_id=current_user.id, doctor_id=doctor.id, appointment_datetime=appt_time, status='confirmed')
-                                db.session.add(new_appt)
-                                db.session.commit()
-                                action_payload['response'] = f"Your appointment with Dr. {doctor.full_name} is confirmed for {appt_time.strftime('%I:%M %p')} today. You can view it in the appointments section."
-                                action_payload['action'] = 'BOOKING_SUCCESS'
-                            else: # Handle failure
-                                action_payload['response'] = "I'm sorry, there was an error booking that. Let's try again."
-                                action_payload['action'] = 'BOOKING_FAILED'
-                    except json.JSONDecodeError: action_payload = None
-
-            # ... (existing fallback logic) ...
-
-            # *** NEW: Add intent to final payload for the frontend ***
-            if action_payload:
-                action_payload['intent'] = nlu_understanding.get('primary_intent')
-
-            # ... (rest of the function for saving to DB and returning JSON) ...
+        return jsonify(response_data)
 
     except Exception as e:
         logger.error(f"FATAL ERROR in /predict endpoint: {e}", exc_info=True)
@@ -1111,7 +1220,6 @@ def predict():
             "interactive_buttons": [],
             "error": True
         }), 500
-
 @app.route("/v1/conversational-booking", methods=["POST"])
 def conversational_booking():
     """

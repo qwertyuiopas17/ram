@@ -273,6 +273,8 @@ class SehatSaharaApiClient:
         
 # In api_ollama_integration.py
 
+        # In api_ollama_integration.py, inside the SehatSaharaApiClient class
+
         self.base_system_prompt = """You are 'Sehat Sahara', an AI health app navigator. Your ONLY job is to respond with a single, valid JSON object. Do not add any text before or after the JSON.
 
     **MANDATORY OUTPUT FORMAT:**
