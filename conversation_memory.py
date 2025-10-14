@@ -155,24 +155,21 @@ class ProgressiveConversationMemory:
         
         self.logger.info("✅ Sehat Sahara Conversation Memory initialized")
     
+    # In conversation_memory.py
+
     def create_or_get_user(self, user_id: str, **kwargs) -> UserProfile:
         """Create or retrieve user profile"""
         if user_id not in self.user_profiles:
             self.user_profiles[user_id] = UserProfile(
                 user_id=user_id,
-                patient_id=kwargs.get('patient_id', ''),
+                patient_id=kwargs.get('patient_id', user_id), # Use user_id as fallback
                 full_name=kwargs.get('full_name', ''),
                 preferred_language=kwargs.get('preferred_language', 'hi'),
                 location=kwargs.get('location', '')
             )
             self.logger.info(f"Created new user profile for: {user_id}")
-        else:
-            # Update existing profile with new information
-            profile = self.user_profiles[user_id]
-            for key, value in kwargs.items():
-                if hasattr(profile, key) and value:
-                    setattr(profile, key, value)
         
+        # Always return the existing or newly created profile
         return self.user_profiles[user_id]
     
     def add_conversation_turn(self,
