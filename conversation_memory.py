@@ -36,7 +36,7 @@ class UserProfile:
     post_appointment_feedback_pending: bool = False
     medicine_reminders: List[Dict[str, Any]] = field(default_factory=list)
 
-    # Interactive UI state
+    # Interactive UI state - Only track actual buttons, not conversational features
     show_appointment_button: bool = False
     show_medicine_scan_button: bool = False
     show_prescription_button: bool = False
@@ -269,24 +269,49 @@ class ProgressiveConversationMemory:
         if user_id in self.user_profiles:
             profile = self.user_profiles[user_id]
             completed_task = profile.current_task
-            
+
             # Update statistics based on completed task
             if completed_task == 'appointment_booking':
                 profile.total_appointments_booked += 1
             elif completed_task == 'health_record_request':
                 profile.total_health_records_accessed += 1
-            
+
             # Clear current task
             profile.current_task = ""
             profile.task_context = {}
-            
+
             # Update active tasks
             if user_id in self.active_tasks:
                 self.active_tasks[user_id]['status'] = 'completed'
                 self.active_tasks[user_id]['completed_at'] = datetime.now()
                 self.active_tasks[user_id]['result'] = task_result or {}
-            
+
             self.logger.info(f"Completed task for user {user_id}: {completed_task}")
+
+    def update_conversation_stage_db(self, user_id: str, stage: str) -> None:
+        """Update conversation stage in database (requires database session)"""
+        # This method should be called from within a database session context
+        # Import here to avoid circular imports
+        try:
+            from enhanced_database_models import User, db
+            user = User.query.filter_by(patient_id=user_id).first()
+            if user:
+                user.update_conversation_stage(stage)
+                db.session.commit()
+                self.logger.info(f"Updated conversation stage for user {user_id}: {stage}")
+        except Exception as e:
+            self.logger.error(f"Error updating conversation stage for user {user_id}: {e}")
+
+    def get_conversation_stage_db(self, user_id: str) -> str:
+        """Get conversation stage from database"""
+        try:
+            from enhanced_database_models import User
+            user = User.query.filter_by(patient_id=user_id).first()
+            if user:
+                return getattr(user, 'current_conversation_stage', 'general')
+        except Exception as e:
+            self.logger.error(f"Error getting conversation stage for user {user_id}: {e}")
+        return 'general'
     
     def update_user_preferences(self, user_id: str, preferences: Dict[str, Any]) -> None:
         """Update user preferences"""
@@ -732,6 +757,29 @@ class ProgressiveConversationMemory:
 
         if new_reminders_created > 0:
             self.logger.info(f"Auto-generated {new_reminders_created} new medicine reminders for user {profile.user_id}.")
+
+    def update_button_visibility(self, user_id: str, intent: str) -> None:
+        """Update which buttons should be shown based on user intent - only for actual button features"""
+        profile = self.create_or_get_user(user_id)
+
+        # Reset all button visibility
+        profile.show_appointment_button = False
+        profile.show_medicine_scan_button = False
+        profile.show_prescription_button = False
+
+        # Show appropriate buttons based on intent - only for button-based features
+        if intent == 'appointment_booking':
+            profile.show_appointment_button = True
+        elif intent == 'medicine_scan':
+            profile.show_medicine_scan_button = True
+        elif intent == 'prescription_upload':
+            profile.show_prescription_button = True
+        elif intent in ['prescription_inquiry', 'find_medicine']:
+            # Show both medicine scan and prescription buttons for medicine-related queries
+            profile.show_medicine_scan_button = True
+            profile.show_prescription_button = True
+
+        self.logger.info(f"Updated button visibility for user {user_id} based on intent: {intent}")
 
 # Global instance for easy import
 conversation_memory = ProgressiveConversationMemory()

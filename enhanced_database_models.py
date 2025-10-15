@@ -50,6 +50,9 @@ class User(db.Model):
     # Enhanced fields
     timezone = db.Column(db.String(50), default='Asia/Kolkata')
     notification_preferences = db.Column(db.Text)  # JSON object for notification settings
+
+    # Conversation state tracking
+    current_conversation_stage = db.Column(db.String(100), default='general')  # Track current conversation stage
     
     # Relationships
     conversation_turns = db.relationship('ConversationTurn', backref='user', lazy=True, cascade='all, delete-orphan')
@@ -81,6 +84,10 @@ class User(db.Model):
     def update_last_login(self):
         """Update last login timestamp"""
         self.last_login = datetime.now()
+
+    def update_conversation_stage(self, stage: str):
+        """Update current conversation stage"""
+        self.current_conversation_stage = stage
     
     def get_full_address(self):
         """Get formatted full address"""

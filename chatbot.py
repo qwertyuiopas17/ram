@@ -1024,6 +1024,11 @@ def predict():
         nlu_understanding = nlu_processor.understand_user_intent(user_message, sehat_sahara_mode=True)
         ai_message_override = user_message
         is_booking_flow = False
+
+        # Update button visibility based on user intent - only for button-based features
+        primary_intent = nlu_understanding.get('primary_intent', 'general_inquiry')
+        if primary_intent not in ['symptom_triage']:  # Symptom triage is conversational, not button-based
+            conversation_memory.update_button_visibility(current_user.patient_id, primary_intent)
         # --- THIS IS THE FIX ---
         # Define last_bot_response here as an empty dictionary by default.
         # This guarantees it always exists, fixing the NameError crash.
@@ -1105,9 +1110,53 @@ def predict():
             # Persist the updated context back to memory
             conversation_memory.set_current_task(current_user.patient_id, 'appointment_booking', booking_context)
 
+            # Update conversation stage based on booking progress
+            if 'specialty' in booking_context:
+                current_user.update_conversation_stage('selecting_doctor')
+            elif 'doctor_name' in booking_context:
+                current_user.update_conversation_stage('selecting_date')
+            elif 'date' in booking_context:
+                current_user.update_conversation_stage('selecting_time')
+            elif 'time_iso' in booking_context:
+                current_user.update_conversation_stage('selecting_mode')
+            else:
+                current_user.update_conversation_stage('selecting_specialty')
+
         # --- AI-DRIVEN RESPONSE GENERATION (No changes here, it uses ai_message_override) ---
 
         
+        # Update conversation stage based on current flow
+        current_task = conversation_memory.get_current_task(current_user.patient_id)
+
+        # Handle appointment booking stages
+        if current_task.get('task') == 'appointment_booking':
+            if 'specialty' in current_task.get('context', {}):
+                current_user.update_conversation_stage('selecting_doctor')
+            elif 'doctor_name' in current_task.get('context', {}):
+                current_user.update_conversation_stage('selecting_date')
+            elif 'date' in current_task.get('context', {}):
+                current_user.update_conversation_stage('selecting_time')
+            elif 'time_iso' in current_task.get('context', {}):
+                current_user.update_conversation_stage('selecting_mode')
+            else:
+                current_user.update_conversation_stage('selecting_specialty')
+
+        # Note: Symptom triage is conversational (AI asks questions), not button-based
+
+        # Handle medicine scan stages
+        elif current_task.get('task') == 'medicine_scan':
+            current_user.update_conversation_stage('medicine_identification')
+
+        # Handle prescription upload stages
+        elif current_task.get('task') == 'prescription_upload':
+            current_user.update_conversation_stage('prescription_processing')
+
+        # Default to general stage
+        else:
+            current_user.update_conversation_stage('general')
+
+        db.session.commit()
+
         # --- AI-DRIVEN RESPONSE GENERATION ---
         action_payload = None
         if sehat_sahara_client and sehat_sahara_client.is_available:
@@ -1132,10 +1181,12 @@ def predict():
                             action_payload['response'] = f"Your appointment with Dr. {doctor.full_name} is confirmed for {appt_time.strftime('%A, %b %d at %I:%M %p')}. You can view it in the appointments section."
                             action_payload['action'] = 'BOOKING_SUCCESS'
                             conversation_memory.complete_task(current_user.patient_id) # Clear the task context
+                            current_user.update_conversation_stage('general') # Reset to general stage
                         else:
                             action_payload['response'] = "I'm sorry, there was an error with the stored information. Let's try again."
                             action_payload['action'] = 'BOOKING_FAILED'
                             conversation_memory.complete_task(current_user.patient_id) # Clear the task context
+                            current_user.update_conversation_stage('general') # Reset to general stage
 
                 except json.JSONDecodeError:
                     action_payload = None
@@ -1582,9 +1633,9 @@ def get_history():
             "history": chat_log,
             "summary": {
                 "total_conversations": current_user.total_conversations,
-                "current_stage": current_user.current_conversation_stage,
-                "risk_level": current_user.current_risk_level,
-                "improvement_trend": current_user.improvement_trend,
+                "current_stage": conversation_memory.get_conversation_stage_db(current_user.patient_id),
+                "risk_level": getattr(current_user, 'current_risk_level', 'low'),
+                "improvement_trend": getattr(current_user, 'improvement_trend', 'stable'),
                 "member_since": current_user.created_at.isoformat(),
                 "last_interaction": current_user.last_login.isoformat() if current_user.last_login else None
             }
