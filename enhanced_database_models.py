@@ -21,7 +21,8 @@ class User(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False, index=True)
     phone_number = db.Column(db.String(15), nullable=True)
     # Change it to this to enforce uniqueness and make it required:
-    full_name = db.Column(db.String(100), unique=True, nullable=False)
+    # To this (remove unique=True):
+    full_name = db.Column(db.String(100), nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     role = db.Column(db.String(50), nullable=False, default='patient')
     

@@ -157,6 +157,7 @@ class ProgressiveConversationMemory:
     
     # In conversation_memory.py
 
+    # Replace the create_or_get_user function with this corrected version:
     def create_or_get_user(self, user_id: str, **kwargs) -> UserProfile:
         """Create or retrieve user profile"""
         if user_id not in self.user_profiles:
@@ -166,10 +167,10 @@ class ProgressiveConversationMemory:
                 full_name=kwargs.get('full_name', ''),
                 preferred_language=kwargs.get('preferred_language', 'hi'),
                 location=kwargs.get('location', '')
-            )
+                )
             self.logger.info(f"Created new user profile for: {user_id}")
-        
-        # Always return the existing or newly created profile
+    
+    # Always return the existing or newly created profile
         return self.user_profiles[user_id]
     
     def add_conversation_turn(self,
