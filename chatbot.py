@@ -997,17 +997,6 @@ def _get_or_create_booking_context(user_id: str) -> Dict[str, Any]:
     conversation_memory.set_current_task(user_id, 'appointment_booking', new_context)
     return new_context
 
-def _get_or_create_symptom_context(user_id: str) -> Dict[str, Any]:
-    """Retrieves or starts a new symptom checker context."""
-    task = conversation_memory.get_current_task(user_id)
-    if task.get('task') == 'symptom_triage' and task.get('context'):
-        return task.get('context')
-    
-    # Start a new task if one isn't active
-    new_context = {'turn_count': 0}
-    conversation_memory.set_current_task(user_id, 'symptom_triage', new_context)
-    return new_context
-
 def _get_available_specialties_from_db() -> list:
     """Gets a unique, sorted list of available doctor specialties from the database."""
     try:
@@ -1076,9 +1065,6 @@ def predict():
         
         task = conversation_memory.get_current_task(current_user.patient_id)
         is_booking_flow = (task.get('task') == 'appointment_booking' and task.get('context')) or primary_intent == 'appointment_booking'
-
-        # <<< --- NEW: Explicitly check for the symptom triage intent --- >>>
-        is_symptom_flow = (task.get('task') == 'symptom_triage' and task.get('context')) or primary_intent == 'symptom_triage'
         
         ai_message_override = user_message
 
@@ -1184,43 +1170,11 @@ def predict():
             conversation_memory.set_current_task(current_user.patient_id, 'appointment_booking', booking_context)
             logger.info(f"Booking context saved: {booking_context}")
         
-
-        # <<< --- THIS IS THE NEW LOGIC BLOCK YOU NEED TO ADD --- >>>
-        elif is_symptom_flow:
-            symptom_context = _get_or_create_symptom_context(current_user.patient_id)
-            turn_count = symptom_context.get('turn_count', 0)
-            
-            logger.info(f"Symptom flow active for user {current_user.patient_id}: turn={turn_count}")
-
-            if turn_count < 3: # Ask up to 2 follow-up questions
-                # Use the conversation history to guide the AI
-                ai_message_override = f"CONTEXT: This is a symptom check conversation. The user just replied '{user_message}'. Acknowledge their answer and ask one more simple, clarifying question based on the conversation history."
-                symptom_context['turn_count'] = turn_count + 1
-                conversation_memory.set_current_task(current_user.patient_id, 'symptom_triage', symptom_context)
-            else: # On the final turn, give remedies and conclude
-                ai_message_override = (
-                    "CONTEXT: You have asked enough questions. Provide a simple, safe home remedy based on the conversation. Then, you MUST include this disclaimer: 'This is not medical advice. For a proper diagnosis, please consult a doctor.' Your final action should be 'CONTINUE_CONVERSATION'."
-                )
-                conversation_memory.complete_task(current_user.patient_id)
-        else:
-            # If it's not booking or symptoms, complete any old task
-            if task.get('task'):
-                conversation_memory.complete_task(current_user.patient_id)
-
-        
-        
         action_payload = None
         if sehat_sahara_client and sehat_sahara_client.is_available:
-            # <<< FIX START: Fetch conversation history for context >>>
-            history = conversation_memory.get_conversation_context(current_user.patient_id, turns=8)
-            context = {
-                "user_intent": primary_intent,
-                "context_history": history
-            }
-            # <<< FIX END >>>
             action_payload_str = sehat_sahara_client.generate_sehatsahara_response(
                 user_message=ai_message_override, 
-                context=context  # Use the new, richer context object
+                context={"user_intent": primary_intent}
             )
             if action_payload_str:
                 try:
