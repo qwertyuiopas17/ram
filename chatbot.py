@@ -1038,10 +1038,22 @@ def _get_available_time_slots() -> list:
 
 # In chatbot.py, replace the /v1/predict function with this final version:
 
+# In chatbot.py, replace your entire /v1/predict function with this one
+def _get_or_create_symptom_context(user_id: str) -> Dict[str, Any]:
+    """Retrieves or starts a new symptom checker context."""
+    task = conversation_memory.get_current_task(user_id)
+    if task.get('task') == 'symptom_triage' and task.get('context'):
+        return task.get('context')
+    
+    # Start a new task if one isn't active
+    new_context = {'turn_count': 0}
+    conversation_memory.set_current_task(user_id, 'symptom_triage', new_context)
+    return new_context
+
 @app.route("/v1/predict", methods=["POST"])
 def predict():
     """
-    Enhanced prediction endpoint with robust, stateful conversational booking support.
+    Enhanced prediction endpoint with isolated, stateful logic for booking and symptom checking.
     """
     try:
         start_time = time.time()
@@ -1064,57 +1076,40 @@ def predict():
         primary_intent = nlu_understanding.get('primary_intent', 'general_inquiry')
         
         task = conversation_memory.get_current_task(current_user.patient_id)
-        is_booking_flow = (task.get('task') == 'appointment_booking' and task.get('context')) or primary_intent == 'appointment_booking'
-        
+        task_in_progress = task.get('task')
+
         ai_message_override = user_message
 
-        if is_booking_flow:
+        # --- TASK MANAGEMENT LOGIC ---
+        # Priority 1: If a task is already in progress, continue it.
+
+        if task_in_progress == 'appointment_booking':
             booking_context = _get_or_create_booking_context(current_user.patient_id)
             last_step = booking_context.get('last_step')
-            logger.info(f"Booking flow active for user {current_user.patient_id}: step={last_step}, context={booking_context}")
+            logger.info(f"Booking flow active for user {current_user.patient_id}: step={last_step}")
 
-            if not last_step:
-                booking_context['last_step'] = 'ask_specialty'
-                available_specialties = _get_available_specialties_from_db()
-                if not available_specialties:
-                    ai_message_override = "CONTEXT: No doctors are available for booking right now. Please check back later."
-                    conversation_memory.complete_task(current_user.patient_id)
-                else:
-                    specialty_buttons = ', '.join([
-                        f'{{"text": "{s}", "action": "SELECT_SPECIALTY", "parameters": {{"specialty": "{s}"}}}}'
-                        for s in available_specialties
-                    ])
-                    ai_message_override = f"CONTEXT: User wants to book an appointment. Ask them to select a specialty by showing these buttons: [{specialty_buttons}]"
-
-            # <<< FIX: This condition now handles both button clicks AND typed input for specialty >>>
-            elif last_step == 'ask_specialty':
+            # This handles both button clicks AND typed input for specialty
+            if last_step == 'ask_specialty':
                 selected_specialty = button_params.get('specialty') if button_action == 'SELECT_SPECIALTY' else user_message
                 doctors = _get_doctors_for_specialty(selected_specialty)
-                
                 if doctors:
                     booking_context['specialty'] = selected_specialty
                     booking_context['last_step'] = 'ask_doctor'
-                    doctor_buttons = ', '.join([
-                        f'{{"text": "Dr. {doc.full_name}", "action": "SELECT_DOCTOR", "parameters": {{"doctor_id": "{doc.doctor_id}"}}}}'
-                        for doc in doctors[:5]
-                    ])
+                    doctor_buttons = ', '.join([f'{{"text": "Dr. {doc.full_name}", "action": "SELECT_DOCTOR", "parameters": {{"doctor_id": "{doc.doctor_id}"}}}}' for doc in doctors[:5]])
                     ai_message_override = f"CONTEXT: The user chose '{selected_specialty}'. Ask them to choose a doctor using these buttons: [{doctor_buttons}]"
                 else:
-                    ai_message_override = f"CONTEXT: No doctors found for '{selected_specialty}'. Apologize and restart the flow by asking for a specialty again."
-                    booking_context.clear() # Reset context to restart
-
-            # <<< FIX: This condition now handles both button clicks AND typed input for doctor >>>
+                    ai_message_override = f"CONTEXT: No doctors found for '{selected_specialty}'. Apologize and restart by asking for a specialty again."
+                    booking_context.clear()
+            
+            # This handles both button clicks AND typed input for doctor
             elif last_step == 'ask_doctor':
                 selected_doctor_id = button_params.get('doctor_id')
                 doctor = Doctor.query.filter_by(doctor_id=selected_doctor_id).first() if selected_doctor_id else None
-                # Fallback for typed doctor name
                 if not doctor:
-                    # Extracts name like "Dr. Priya Singh" -> "Priya Singh"
                     doctor_name_match = re.search(r'(?:Dr\.\s*)?(\w+\s+\w+)', user_message)
                     if doctor_name_match:
                         doctor_name = doctor_name_match.group(1)
                         doctor = Doctor.query.filter(Doctor.full_name.ilike(f'%{doctor_name}%')).first()
-
                 if doctor:
                     booking_context['doctor_id'] = doctor.doctor_id
                     booking_context['doctor_name'] = doctor.full_name
@@ -1123,12 +1118,10 @@ def predict():
                     dates[0]['text'] = 'Today'
                     dates[1]['text'] = 'Tomorrow'
                     date_buttons = ', '.join([f'{{"text": "{d["text"]}", "action": "SELECT_DATE", "parameters": {{"dateISO": "{d["iso"]}"}}}}' for d in dates])
-                    ai_message_override = f"CONTEXT: User chose Dr. {doctor.full_name}. Ask for an appointment date with these buttons: [{date_buttons}]"
+                    ai_message_override = f"CONTEXT: User chose Dr. {doctor.full_name}. Ask for a date with these buttons: [{date_buttons}]"
                 else:
-                    ai_message_override = "CONTEXT: Invalid doctor selected. Please choose a doctor from the list provided."
+                    ai_message_override = "CONTEXT: Invalid doctor. Please choose a doctor from the list."
 
-            # <<< FIX: Removed 'and button_action...' to handle any input >>>
-            # This is the MORE ROBUST version
             elif last_step == 'ask_date' and button_action == 'SELECT_DATE':
                 selected_date_iso = button_params.get('dateISO')
                 if selected_date_iso:
@@ -1136,9 +1129,9 @@ def predict():
                     booking_context['last_step'] = 'ask_time'
                     time_slots = _get_available_time_slots()
                     time_buttons = ', '.join([f'{{"text": "{s["text"]}", "action": "SELECT_TIME", "parameters": {{"timeISO": "{s["iso"]}"}}}}' for s in time_slots])
-                    ai_message_override = f"CONTEXT: User chose a date. Ask them to pick a time slot using these buttons: [{time_buttons}]"
+                    ai_message_override = f"CONTEXT: User chose a date. Ask for a time using these buttons: [{time_buttons}]"
                 else:
-                    ai_message_override = "CONTEXT: Invalid date selected. Please pick a date from the list."
+                    ai_message_override = "CONTEXT: Invalid date. Please pick a date from the list."
 
             elif last_step == 'ask_time' and button_action == 'SELECT_TIME':
                 selected_time_iso = button_params.get('timeISO')
@@ -1147,34 +1140,65 @@ def predict():
                     booking_context['last_step'] = 'ask_mode'
                     modes = ["Video Call", "Audio Call", "Photo-based"]
                     mode_buttons = ', '.join([f'{{"text": "{mode}", "action": "SELECT_MODE", "parameters": {{"mode": "{mode}"}}}}' for mode in modes])
-                    ai_message_override = f"CONTEXT: User chose a time. Ask for the consultation mode with these buttons: [{mode_buttons}]"
+                    ai_message_override = f"CONTEXT: User chose a time. Ask for the mode with these buttons: [{mode_buttons}]"
                 else:
-                    ai_message_override = "CONTEXT: Invalid time selected. Please pick a time from the list."
+                    ai_message_override = "CONTEXT: Invalid time. Please pick a time from the list."
 
             elif last_step == 'ask_mode' and button_action == 'SELECT_MODE':
                 selected_mode = button_params.get('mode')
                 if selected_mode in ["Video Call", "Audio Call", "Photo-based"]:
                     booking_context['mode'] = selected_mode
                     booking_context['last_step'] = 'finalize'
-                    ai_message_override = f"CONTEXT: The user has selected all details. Your action MUST be 'FINALIZE_BOOKING'. Your response should be a simple confirmation message like 'Great, I'm confirming that for you now.'"
+                    ai_message_override = "CONTEXT: All details selected. Your action MUST be 'FINALIZE_BOOKING'. Confirm with the user."
                 else:
-                    ai_message_override = "CONTEXT: Invalid mode selected. Please pick a consultation mode from the list."
-            # <<< ADD THIS FINAL ELSE BLOCK >>>
+                    ai_message_override = "CONTEXT: Invalid mode. Please pick a mode from the list."
             else:
-                # This handles cases where the user types something random mid-flow.
-                # It tells the AI to re-ask the last question.
-                logger.warning(f"User input '{user_message}' did not match expected action for step '{last_step}'. Re-prompting.")
-                # We force the AI to ask the same question again by rebuilding the prompt for the *current* step.
-                # For simplicity, we just ask it to repeat the request for the current step.
-                ai_message_override = f"CONTEXT: The user provided an unexpected response. Please re-ask them to select an option for the current step, which is '{last_step}'."
+                logger.warning(f"Booking flow stalled. User input '{user_message}' did not match step '{last_step}'. Re-prompting.")
+                ai_message_override = f"CONTEXT: User provided an unexpected response. Please re-ask them to select an option for the current step: '{last_step}'."
+            
             conversation_memory.set_current_task(current_user.patient_id, 'appointment_booking', booking_context)
-            logger.info(f"Booking context saved: {booking_context}")
+
+        elif task_in_progress == 'symptom_triage':
+            symptom_context = _get_or_create_symptom_context(current_user.patient_id)
+            turn_count = symptom_context.get('turn_count', 0)
+            
+            if turn_count < 2:
+                ai_message_override = f"CONTEXT: This is a symptom check conversation. User replied '{user_message}'. Acknowledge their answer and ask one more simple clarifying question based on history."
+                symptom_context['turn_count'] = turn_count + 1
+                conversation_memory.set_current_task(current_user.patient_id, 'symptom_triage', symptom_context)
+            else:
+                ai_message_override = (
+                    "CONTEXT: You have asked enough questions. Provide a simple, safe home remedy. Then, MUST include this disclaimer: 'This is not medical advice. For a proper diagnosis, please consult a doctor.' Your final action should be 'CONTINUE_CONVERSATION'."
+                )
+                conversation_memory.complete_task(current_user.patient_id)
+
+        # Priority 2: If no task is active, start a new one based on intent.
+        else:
+            if primary_intent == 'appointment_booking':
+                booking_context = _get_or_create_booking_context(current_user.patient_id)
+                booking_context.clear()
+                booking_context['last_step'] = 'ask_specialty'
+                available_specialties = _get_available_specialties_from_db()
+                specialty_buttons = ', '.join([f'{{"text": "{s}", "action": "SELECT_SPECIALTY", "parameters": {{"specialty": "{s}"}}}}' for s in available_specialties])
+                ai_message_override = f"CONTEXT: User wants to book an appointment. Ask them to select a specialty using these buttons: [{specialty_buttons}]"
+                conversation_memory.set_current_task(current_user.patient_id, 'appointment_booking', booking_context)
+
+            elif primary_intent == 'symptom_triage':
+                symptom_context = _get_or_create_symptom_context(current_user.patient_id)
+                symptom_context['turn_count'] = 1
+                ai_message_override = f"CONTEXT: Start of a symptom check. User said '{user_message}'. Acknowledge their symptom and ask your first clarifying question."
+                conversation_memory.set_current_task(current_user.patient_id, 'symptom_triage', symptom_context)
+            
+            # For general inquiries, no task is set and ai_message_override remains the original user_message.
+
+        # --- AI RESPONSE GENERATION ---
+        history = conversation_memory.get_conversation_context(current_user.patient_id, turns=8)
+        context = {"user_intent": primary_intent, "context_history": history}
         
         action_payload = None
         if sehat_sahara_client and sehat_sahara_client.is_available:
             action_payload_str = sehat_sahara_client.generate_sehatsahara_response(
-                user_message=ai_message_override, 
-                context={"user_intent": primary_intent}
+                user_message=ai_message_override, context=context
             )
             if action_payload_str:
                 try:
@@ -1185,46 +1209,29 @@ def predict():
                         appt_date = booking_context.get('date')
                         appt_time_str = booking_context.get('time')
                         doctor = Doctor.query.filter_by(doctor_id=doc_id).first()
-
                         if all([doctor, appt_date, appt_time_str]):
                             appt_datetime = datetime.fromisoformat(f"{appt_date}T{appt_time_str}:00")
-                            
-                            new_appt = Appointment(
-                                user_id=current_user.id, doctor_id=doctor.id, 
-                                appointment_datetime=appt_datetime, 
-                                appointment_type=booking_context.get('mode', 'Video Call'),
-                                chief_complaint=f"Consultation for {booking_context.get('specialty')}",
-                                status='confirmed'
-                            )
+                            new_appt = Appointment(user_id=current_user.id, doctor_id=doctor.id, appointment_datetime=appt_datetime, appointment_type=booking_context.get('mode', 'Video Call'), chief_complaint=f"Consultation for {booking_context.get('specialty')}", status='confirmed')
                             db.session.add(new_appt)
                             db.session.commit()
                             update_system_state('book_doctor', appointments_booked=1)
-
-                            action_payload['response'] = f"Your appointment with Dr. {doctor.full_name} is confirmed for {appt_datetime.strftime('%A, %b %d at %I:%M %p')}. You can view it in your appointments section."
+                            action_payload['response'] = f"Your appointment with Dr. {doctor.full_name} is confirmed for {appt_datetime.strftime('%A, %b %d at %I:%M %p')}."
                             action_payload['action'] = 'BOOKING_SUCCESS'
                             conversation_memory.complete_task(current_user.patient_id)
                         else:
-                            action_payload['response'] = "I'm sorry, there was an error with the stored booking information. Let's start over."
+                            action_payload['response'] = "I'm sorry, there was an error with the booking details. Let's start over."
                             action_payload['action'] = 'BOOKING_FAILED'
                             conversation_memory.complete_task(current_user.patient_id)
-                
                 except json.JSONDecodeError:
                     action_payload = None
-
+        
         if not action_payload:
             logger.warning(f"AI failed or unavailable. Using local fallback for intent: {primary_intent}")
-            action_payload = response_generator.generate_response(
-                user_message=user_message, nlu_result=nlu_understanding,
-                user_context={'user_id': current_user.patient_id},
-                conversation_history=conversation_memory.get_conversation_context(current_user.patient_id, turns=5)
-            )
+            action_payload = response_generator.generate_response(user_message=user_message, nlu_result=nlu_understanding, user_context={'user_id': current_user.patient_id}, conversation_history=history)
 
+        # --- FINAL PROCESSING & SAVING ---
         action_payload_str = json.dumps(action_payload, ensure_ascii=False)
-        turn_record = ConversationTurn(
-            user_id=current_user.id, user_message=user_message,
-            bot_response=action_payload_str, detected_intent=primary_intent,
-            action_triggered=action_payload.get('action')
-        )
+        turn_record = ConversationTurn(user_id=current_user.id, user_message=user_message, bot_response=action_payload_str, detected_intent=primary_intent, action_triggered=action_payload.get('action'))
         db.session.add(turn_record)
         db.session.commit()
         
@@ -1238,8 +1245,6 @@ def predict():
         db.session.rollback()
         return jsonify({"response": "I'm having a technical issue. Please try again.", "action": "SHOW_APP_FEATURES", "interactive_buttons": []}), 500
 
-
-    
 def get_booking_data_internal():
     """Internal helper to get booking data from database"""
     try:
