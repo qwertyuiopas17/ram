@@ -1890,7 +1890,8 @@ def get_dashboard():
                 "date": record.created_at.isoformat(),
                 "title": record.title,
                 "description": record.description or "",
-                "recordType": record.record_type
+                "recordType": record.record_type,
+                "imageData": record.image_data  # Add
             }
             if record.file_url:
                 record_data["imageUrl"] = record.file_url
@@ -2693,4 +2694,5 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
