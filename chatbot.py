@@ -2474,41 +2474,6 @@ def get_doctor_profile():
         return jsonify({"error": "Failed to load doctor profile"}), 500
 
 
-@app.route("/v1/pharmacy/dashboard", methods=["GET"])
-def get_pharmacy_dashboard():
-    """Pharmacy dashboard endpoint to get orders and inventory alerts."""
-    try:
-        # Mock pharmacy ID
-        pharmacy_id = 1
-
-        pharmacy = Pharmacy.query.get(pharmacy_id)
-        if not pharmacy:
-            return jsonify({"error": "Pharmacy not found"}), 404
-
-        new_orders = MedicineOrder.query.filter_by(
-            pharmacy_id=pharmacy.id,
-            status='Placed'
-        ).order_by(MedicineOrder.created_at.desc()).all()
-
-        orders_data = [
-            {"id": order.order_id, "customer": User.query.get(order.user_id).full_name, "status": order.status}
-            for order in new_orders
-        ]
-
-        # This would query an inventory table in a real app
-        low_stock_alerts = 3
-
-        return jsonify({
-            "success": True,
-            "pharmacyName": pharmacy.name,
-            "newOrdersCount": len(orders_data),
-            "pendingDeliveriesCount": MedicineOrder.query.filter_by(pharmacy_id=pharmacy.id, status='Out for Delivery').count(),
-            "lowStockAlerts": low_stock_alerts,
-            "orders": orders_data
-        })
-    except Exception as e:
-        logger.error(f"Error fetching pharmacy dashboard: {e}", exc_info=True)
-        return jsonify({"error": "Failed to load pharmacy dashboard"}), 500
     
 
 # WebRTC signaling endpoints
@@ -2728,3 +2693,4 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
