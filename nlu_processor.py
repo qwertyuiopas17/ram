@@ -30,7 +30,7 @@ class ProgressiveNLUProcessor:
         # OpenRouter API configuration
         self.openrouter_api_key = openrouter_api_key or os.getenv('OPENROUTER_API_KEY')
         self.openrouter_base_url = "https://openrouter.ai/api/v1"
-        self.openrouter_model = "meta-llama/llama-3.1-8b-instruct"  # Fast, multilingual model
+        self.openrouter_model = "mistralai/mistral-nemo:free"  # Fast, multilingual model
 
         # Initialize OpenRouter for enhanced understanding
         self.openrouter_available = False
