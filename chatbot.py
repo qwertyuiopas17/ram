@@ -2331,6 +2331,11 @@ def upload_prescription():
 
 
     
+        # --- NEW: Generate the summary text right here ---
+        summary_response = response_generator.generate_prescription_summary_response(
+            prescription_data, user.preferred_language
+        )
+
         return jsonify({
             "success": True,
             "message": "Prescription uploaded and analyzed successfully",
@@ -2340,7 +2345,8 @@ def upload_prescription():
                 "medications": medications,
                 "tests": tests,
                 "diagnosis": diagnosis
-            }
+            },
+            "formatted_response": summary_response  # <-- ADD THIS LINE
         })
 
     except Exception as e:
@@ -2694,5 +2700,6 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
