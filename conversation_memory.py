@@ -242,6 +242,8 @@ class ProgressiveConversationMemory:
     def set_current_task(self, user_id: str, task: str, context: Dict[str, Any] = None) -> None:
         """Set current task for user (e.g., appointment booking flow)"""
         profile = self.create_or_get_user(user_id)
+        old_task = profile.current_task
+
         profile.current_task = task
         profile.task_context = context or {}
 
@@ -256,7 +258,11 @@ class ProgressiveConversationMemory:
         # Update last interaction time to keep conversation alive
         profile.last_interaction = datetime.now()
 
-        self.logger.info(f"Set current task for user {user_id}: {task}")
+        # Enhanced logging for debugging
+        if old_task and old_task != task:
+            self.logger.info(f"Task changed for user {user_id}: '{old_task}' -> '{task}'")
+        else:
+            self.logger.info(f"Set current task for user {user_id}: {task}")
     
     def get_current_task(self, user_id: str) -> Dict[str, Any]:
         """Get current task and context for user"""
@@ -291,6 +297,11 @@ class ProgressiveConversationMemory:
                 self.active_tasks[user_id]['result'] = task_result or {}
 
             self.logger.info(f"Completed task for user {user_id}: {completed_task}")
+
+            # Special handling for symptom triage completion
+            if completed_task == 'symptom_triage':
+                # Update button visibility for medicine recommendations
+                self.update_button_visibility(user_id, 'medicine_recommendation')
 
     def update_conversation_stage_db(self, user_id: str, stage: str) -> None:
         """Update conversation stage in database (requires database session)"""

@@ -1241,6 +1241,22 @@ def predict():
         # This prevents the booking/symptom flow from "hijacking" the conversation.
         related_booking_intents = ['appointment_booking', 'SELECT_SPECIALTY', 'SELECT_DOCTOR', 'SELECT_DATE', 'SELECT_TIME', 'SELECT_MODE']
         related_symptom_intents = ['symptom_triage', 'CONTINUE_SYMPTOM_CHECK']
+
+        # Special handling for symptom triage context
+        if task_in_progress == 'symptom_triage' and primary_intent == 'out_of_scope':
+            # Check if this might be a symptom follow-up that was misclassified
+            symptom_followup_indicators = [
+                'days', 'hours', 'weeks', 'since', 'ago', 'started', 'began',
+                'pain', 'hurt', 'ache', 'feel', 'feeling', 'still', 'now', 'when',
+                'morning', 'night', 'yesterday', 'today', 'severe', 'mild', 'moderate'
+            ]
+            message_words = user_message.lower().split()
+            is_likely_symptom_followup = any(indicator in message_words for indicator in symptom_followup_indicators)
+
+            if is_likely_symptom_followup:
+                logger.info(f"Correcting misclassified symptom follow-up for user {current_user.patient_id}")
+                primary_intent = 'symptom_triage'
+
         is_unrelated_intent = (
             task_in_progress and
             primary_intent not in related_booking_intents and
@@ -1335,17 +1351,17 @@ def predict():
         
         elif task_in_progress == 'symptom_triage':
             symptom_context = _get_or_create_symptom_context(current_user.patient_id)
-    # --- FIX #2: Append the new symptom to our memory ---
+            # --- FIX #2: Append the new symptom to our memory ---
             symptom_context['symptoms_reported'].append(user_message)
             turn_count = symptom_context.get('turn_count', 0)
-    
-    # We'll ask 2 follow-up questions total
-            if turn_count < 2:
+
+            # We'll ask 3 follow-up questions total to gather enough information
+            if turn_count < 3:
                 ai_message_override = f"CONTEXT: This is a symptom check conversation. User replied '{user_message}'. Acknowledge their answer and ask one more simple clarifying question based on the conversation history."
                 symptom_context['turn_count'] = turn_count + 1
                 conversation_memory.set_current_task(current_user.patient_id, 'symptom_triage', symptom_context)
             else:
-        # --- FIX #2: Pass all collected symptoms to the final prompt ---
+                # --- FIX #2: Pass all collected symptoms to the final prompt ---
                 reported_symptoms_str = '; '.join(symptom_context['symptoms_reported'])
                 ai_message_override = (
                     f"CONTEXT: The user has reported the following symptoms: '{reported_symptoms_str}'. "
@@ -1372,11 +1388,11 @@ def predict():
 
             
             elif primary_intent == 'symptom_triage':
-    # --- FIX #2: Pass the initial symptom when creating the context ---
-                 symptom_context = _get_or_create_symptom_context(current_user.patient_id, initial_symptom=user_message)
-                 symptom_context['turn_count'] = 1
-                 ai_message_override = f"CONTEXT: Start of a symptom check. User said '{user_message}'. Acknowledge their symptom and ask your first clarifying question (e.g., 'For how long?' or 'Is it a sharp or dull pain?')."
-                 conversation_memory.set_current_task(current_user.patient_id, 'symptom_triage', symptom_context)
+                # --- FIX #2: Pass the initial symptom when creating the context ---
+                symptom_context = _get_or_create_symptom_context(current_user.patient_id, initial_symptom=user_message)
+                symptom_context['turn_count'] = 1
+                ai_message_override = f"CONTEXT: Start of a symptom check. User said '{user_message}'. Acknowledge their symptom and ask your first clarifying question (e.g., 'For how long?' or 'Is it a sharp or dull pain?')."
+                conversation_memory.set_current_task(current_user.patient_id, 'symptom_triage', symptom_context)
         
         # ... rest of the function remains the same ...
         # --- AI RESPONSE GENERATION ---

@@ -1186,6 +1186,21 @@ Consider:
 
             if score > 0:
                 scores[category] = min(score, 1.0)
+
+        # Special handling for symptom follow-up messages
+        message_lower = message.lower()
+        symptom_followup_indicators = [
+            'days', 'hours', 'weeks', 'since', 'ago', 'started', 'began',
+            'pain', 'hurt', 'ache', 'feel', 'feeling', 'still', 'now', 'when'
+        ]
+
+        # If message contains symptom follow-up indicators, boost symptom_triage score
+        if any(indicator in message_lower for indicator in symptom_followup_indicators):
+            if 'symptom_triage' in scores:
+                scores['symptom_triage'] = min(scores['symptom_triage'] * 1.8, 1.0)
+            else:
+                scores['symptom_triage'] = 0.7  # Give it a decent score even if no direct keywords
+
         return scores
 
     def _assess_urgency_and_severity(self, message: str, analysis: Dict) -> Dict[str, Any]:
@@ -1337,6 +1352,18 @@ Consider:
     def _is_out_of_scope(self, message: str) -> bool:
         """Check if message is out of scope for health app."""
         out_of_scope_keywords = self.intent_categories['out_of_scope']['keywords']
+
+        # Don't classify very short messages as out of scope if they contain numbers (likely symptom follow-ups)
+        if len(message.split()) <= 3:
+            message_lower = message.lower()
+            # If message contains numbers and time-related words, it's likely a symptom follow-up
+            has_numbers = any(char.isdigit() for char in message)
+            time_indicators = ['day', 'days', 'hour', 'hours', 'week', 'weeks', 'month', 'months']
+            has_time_words = any(indicator in message_lower for indicator in time_indicators)
+
+            if has_numbers and has_time_words:
+                return False  # Don't classify as out of scope
+
         return any(keyword in message.lower() for keyword in out_of_scope_keywords)
 
     def _generate_out_of_scope_response(self) -> Dict[str, Any]:
