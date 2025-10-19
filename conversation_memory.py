@@ -62,13 +62,13 @@ class UserProfile:
             'location': self.location,
             'conversation_history': self.conversation_history[-10:],  # Keep last 10 turns
             'current_session_id': self.current_session_id,
-            'last_interaction': self.last_interaction.isoformat(),
+            'last_interaction': self.last_interaction.isoformat() if isinstance(self.last_interaction, datetime) else str(self.last_interaction),
             'message_count': self.message_count,
             'current_task': self.current_task,
             'task_context': self.task_context,
             'appointment_status': self.appointment_status,
             'prescription_summary': self.prescription_summary,
-            'last_appointment_date': self.last_appointment_date.isoformat() if self.last_appointment_date else None,
+            'last_appointment_date': self.last_appointment_date.isoformat() if self.last_appointment_date and isinstance(self.last_appointment_date, datetime) else (str(self.last_appointment_date) if self.last_appointment_date else None),
             'post_appointment_feedback_pending': self.post_appointment_feedback_pending,
             'medicine_reminders': self.medicine_reminders,
             'show_appointment_button': self.show_appointment_button,
@@ -244,7 +244,7 @@ class ProgressiveConversationMemory:
         profile = self.create_or_get_user(user_id)
         profile.current_task = task
         profile.task_context = context or {}
-        
+
         # Track active task
         self.active_tasks[user_id] = {
             'task': task,
@@ -252,7 +252,10 @@ class ProgressiveConversationMemory:
             'started_at': datetime.now(),
             'status': 'active'
         }
-        
+
+        # Update last interaction time to keep conversation alive
+        profile.last_interaction = datetime.now()
+
         self.logger.info(f"Set current task for user {user_id}: {task}")
     
     def get_current_task(self, user_id: str) -> Dict[str, Any]:
@@ -777,6 +780,10 @@ class ProgressiveConversationMemory:
             profile.show_prescription_button = True
         elif intent in ['prescription_inquiry', 'find_medicine']:
             # Show both medicine scan and prescription buttons for medicine-related queries
+            profile.show_medicine_scan_button = True
+            profile.show_prescription_button = True
+        elif intent == 'medicine_recommendation':
+            # Show medicine-related buttons for symptom checker recommendations
             profile.show_medicine_scan_button = True
             profile.show_prescription_button = True
 

@@ -1240,10 +1240,13 @@ def predict():
         # If the user has a new, unrelated intent, cancel the old task.
         # This prevents the booking/symptom flow from "hijacking" the conversation.
         related_booking_intents = ['appointment_booking', 'SELECT_SPECIALTY', 'SELECT_DOCTOR', 'SELECT_DATE', 'SELECT_TIME', 'SELECT_MODE']
+        related_symptom_intents = ['symptom_triage', 'CONTINUE_SYMPTOM_CHECK']
         is_unrelated_intent = (
             task_in_progress and
             primary_intent not in related_booking_intents and
             button_action not in related_booking_intents and
+            primary_intent not in related_symptom_intents and
+            button_action not in related_symptom_intents and
             primary_intent != task_in_progress
         )
         if is_unrelated_intent:
@@ -1348,9 +1351,13 @@ def predict():
                     f"CONTEXT: The user has reported the following symptoms: '{reported_symptoms_str}'. "
                     "You have asked enough questions. Provide a simple, safe home remedy for these symptoms. "
                     "Then, you MUST include this exact disclaimer: 'This is not medical advice. For a proper diagnosis, please consult a doctor.' "
-                    "Your final action should be 'CONTINUE_CONVERSATION'."
+                    "After the remedy and disclaimer, provide guidance on how to use the medicine scan and prescription upload features, "
+                    "then show these interactive buttons for navigation: "
+                    "[{\"text\": \"📷 Scan Medicine\", \"action\": \"START_MEDICINE_SCANNER\", \"parameters\": {}, \"style\": \"primary\"}, "
+                    "{\"text\": \"📤 Upload Prescription\", \"action\": \"UPLOAD_PRESCRIPTION\", \"parameters\": {}, \"style\": \"secondary\"}]. "
+                    "Your final action should be 'SHOW_MEDICINE_REMEDY'."
                     )
-                conversation_memory.complete_task(current_user.patient_id) 
+                conversation_memory.complete_task(current_user.patient_id)
 
         # This logic is also now correctly accessed
         else:
@@ -1415,6 +1422,17 @@ def predict():
         turn_record = ConversationTurn(user_id=current_user.id, user_message=user_message, bot_response=action_payload_str, detected_intent=primary_intent, action_triggered=action_payload.get('action'))
         db.session.add(turn_record)
         db.session.commit()
+
+        # Handle special medicine remedy action for symptom checker
+        if action_payload.get('action') == 'SHOW_MEDICINE_REMEDY':
+            # Update conversation memory to show medicine buttons
+            conversation_memory.update_button_visibility(current_user.patient_id, 'medicine_recommendation')
+
+        # Ensure conversation memory is saved after each interaction
+        try:
+            conversation_memory.save_to_file(os.path.join(models_path, 'conversation_memory.json'))
+        except Exception as save_error:
+            logger.warning(f"Failed to save conversation memory: {save_error}")
         
         response_time = time.time() - start_time
         logger.info(f"User {current_user.patient_id} processed in {response_time:.2f}s")
