@@ -138,44 +138,26 @@ class ProgressiveNLUProcessor:
             },
             'symptom_triage': {
                 'keywords': [
-                    # English - expanded with follow-up patterns
+                    # English
                     'fever', 'headache', 'pain', 'cough', 'cold', 'stomach pain', 'chest pain',
                     'feeling sick', 'not feeling well', 'symptoms', 'body ache', 'chills',
                     'vomiting', 'diarrhea', 'jaundice', 'yellow skin', 'persistent cough',
                     'weight loss', 'fatigue', 'weakness', 'high fever', 'severe headache',
                     'joint pain', 'skin rash', 'abdominal pain', 'nausea', 'dehydration',
-                    # Follow-up patterns for continuing symptom conversations
-                    'since yesterday', 'for about', 'for around', 'about 2 hours', 'about 3 days',
-                    'for 2 hours', 'for 3 days', 'for a week', 'for hours', 'for days',
-                    'started yesterday', 'began yesterday', 'since morning', 'since afternoon',
-                    'getting worse', 'getting better', 'same as before', 'still hurts',
-                    'hurts a lot', 'really bad', 'very painful', 'sharp pain', 'dull pain',
-                    'constant pain', 'comes and goes', 'on and off', 'intermittent',
-                    'severe pain', 'mild pain', 'moderate pain', 'terrible pain',
-                    'in my head', 'in my chest', 'in my stomach', 'in my back',
-                    'all over', 'here and there', 'specific location',
-                    # Hindi (Latin script) - expanded with follow-up patterns
+                    # Hindi (Latin script)
                     'bukhar hai', 'sir dard hai', 'dard hai', 'khansi hai', 'pet dard hai',
                     'tabiyat kharab hai', 'bimari hai', 'body pain hai', 'chill lag rahi hai',
                     'ulti ho rahi hai', 'dast aa rahe hain', 'piliya hai', 'peeli chamdi',
                     'khansi nahi rukti', 'vajan kam ho raha hai', 'thakan mahsus ho rahi hai',
                     'kamzori hai', 'tez bukhar', 'tez sir dard', 'joint pain', 'chamdi par rash',
                     'pet mein dard', 'ghabrahat', 'dehydration',
-                    # Hindi follow-up patterns
-                    'kal se', 'do din se', 'teen din se', 'ghante se', 'raat se',
-                    'subah se', 'sham se', 'bahut dard', 'zyada dard', 'tez dard',
-                    'lagatar dard', 'kabhi kabhi', 'ja raha hai', 'aa raha hai',
-                    # Punjabi (Latin script) - expanded with follow-up patterns
+                    # Punjabi (Latin script)
                     'bukhar hai', 'sir dukh raha hai', 'dard hai', 'khansi hai', 'pet dukh raha hai',
                     'tabiyat kharab hai', 'bimari hai', 'body pain hai', 'chill lag rahi hai',
                     'ulti ho rahi hai', 'dast aa rahe hain', 'piliya hai', 'peeli chamdi',
                     'khansi nahi rukdi', 'vajan kam ho raha hai', 'thakan mahsus ho rahi hai',
                     'kamzori hai', 'tez bukhar', 'tez sir dard', 'joint pain', 'chamdi te rash',
-                    'pet vich dard', 'ghabrahat', 'dehydration',
-                    # Punjabi follow-up patterns
-                    'kal ton', 'do din ton', 'teen din ton', 'ghante ton', 'raat ton',
-                    'subah ton', 'sham ton', 'bahut dukh', 'zyada dukh', 'tez dukh',
-                    'lagatar dukh', 'kabhi kabhi', 'ja raha hai', 'aa raha hai'
+                    'pet vich dard', 'ghabrahat', 'dehydration'
                 ],
                 'urgency_indicators': ['severe pain', 'chest pain', 'breathing problem', 'emergency', 'accident', 'high fever', 'unconscious', 'severe vomiting', 'blood in stool']
             },
@@ -1186,21 +1168,6 @@ Consider:
 
             if score > 0:
                 scores[category] = min(score, 1.0)
-
-        # Special handling for symptom follow-up messages
-        message_lower = message.lower()
-        symptom_followup_indicators = [
-            'days', 'hours', 'weeks', 'since', 'ago', 'started', 'began',
-            'pain', 'hurt', 'ache', 'feel', 'feeling', 'still', 'now', 'when'
-        ]
-
-        # If message contains symptom follow-up indicators, boost symptom_triage score
-        if any(indicator in message_lower for indicator in symptom_followup_indicators):
-            if 'symptom_triage' in scores:
-                scores['symptom_triage'] = min(scores['symptom_triage'] * 1.8, 1.0)
-            else:
-                scores['symptom_triage'] = 0.7  # Give it a decent score even if no direct keywords
-
         return scores
 
     def _assess_urgency_and_severity(self, message: str, analysis: Dict) -> Dict[str, Any]:
@@ -1352,18 +1319,6 @@ Consider:
     def _is_out_of_scope(self, message: str) -> bool:
         """Check if message is out of scope for health app."""
         out_of_scope_keywords = self.intent_categories['out_of_scope']['keywords']
-
-        # Don't classify very short messages as out of scope if they contain numbers (likely symptom follow-ups)
-        if len(message.split()) <= 3:
-            message_lower = message.lower()
-            # If message contains numbers and time-related words, it's likely a symptom follow-up
-            has_numbers = any(char.isdigit() for char in message)
-            time_indicators = ['day', 'days', 'hour', 'hours', 'week', 'weeks', 'month', 'months']
-            has_time_words = any(indicator in message_lower for indicator in time_indicators)
-
-            if has_numbers and has_time_words:
-                return False  # Don't classify as out of scope
-
         return any(keyword in message.lower() for keyword in out_of_scope_keywords)
 
     def _generate_out_of_scope_response(self) -> Dict[str, Any]:

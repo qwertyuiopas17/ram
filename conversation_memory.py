@@ -62,13 +62,13 @@ class UserProfile:
             'location': self.location,
             'conversation_history': self.conversation_history[-10:],  # Keep last 10 turns
             'current_session_id': self.current_session_id,
-            'last_interaction': self.last_interaction.isoformat() if isinstance(self.last_interaction, datetime) else str(self.last_interaction),
+            'last_interaction': self.last_interaction.isoformat(),
             'message_count': self.message_count,
             'current_task': self.current_task,
             'task_context': self.task_context,
             'appointment_status': self.appointment_status,
             'prescription_summary': self.prescription_summary,
-            'last_appointment_date': self.last_appointment_date.isoformat() if self.last_appointment_date and isinstance(self.last_appointment_date, datetime) else (str(self.last_appointment_date) if self.last_appointment_date else None),
+            'last_appointment_date': self.last_appointment_date.isoformat() if self.last_appointment_date else None,
             'post_appointment_feedback_pending': self.post_appointment_feedback_pending,
             'medicine_reminders': self.medicine_reminders,
             'show_appointment_button': self.show_appointment_button,
@@ -116,10 +116,7 @@ class UserProfile:
         last_interaction_str = data.get('last_interaction')
         if last_interaction_str:
             try:
-                if isinstance(last_interaction_str, str):
-                    profile.last_interaction = datetime.fromisoformat(last_interaction_str)
-                else:
-                    profile.last_interaction = datetime.now()
+                profile.last_interaction = datetime.fromisoformat(last_interaction_str)
             except:
                 profile.last_interaction = datetime.now()
 
@@ -127,10 +124,7 @@ class UserProfile:
         last_appointment_str = data.get('last_appointment_date')
         if last_appointment_str:
             try:
-                if isinstance(last_appointment_str, str):
-                    profile.last_appointment_date = datetime.fromisoformat(last_appointment_str)
-                else:
-                    profile.last_appointment_date = None
+                profile.last_appointment_date = datetime.fromisoformat(last_appointment_str)
             except:
                 profile.last_appointment_date = None
 
@@ -248,11 +242,9 @@ class ProgressiveConversationMemory:
     def set_current_task(self, user_id: str, task: str, context: Dict[str, Any] = None) -> None:
         """Set current task for user (e.g., appointment booking flow)"""
         profile = self.create_or_get_user(user_id)
-        old_task = profile.current_task
-
         profile.current_task = task
         profile.task_context = context or {}
-
+        
         # Track active task
         self.active_tasks[user_id] = {
             'task': task,
@@ -260,22 +252,13 @@ class ProgressiveConversationMemory:
             'started_at': datetime.now(),
             'status': 'active'
         }
-
-        # Update last interaction time to keep conversation alive
-        profile.last_interaction = datetime.now()
-
-        # Enhanced logging for debugging
-        if old_task and old_task != task:
-            self.logger.info(f"Task changed for user {user_id}: '{old_task}' -> '{task}'")
-        else:
-            self.logger.info(f"Set current task for user {user_id}: {task}")
+        
+        self.logger.info(f"Set current task for user {user_id}: {task}")
     
     def get_current_task(self, user_id: str) -> Dict[str, Any]:
         """Get current task and context for user"""
         if user_id in self.user_profiles:
             profile = self.user_profiles[user_id]
-            # Ensure last interaction is updated to keep conversation alive
-            profile.last_interaction = datetime.now()
             return {
                 'task': profile.current_task,
                 'context': profile.task_context
@@ -305,11 +288,6 @@ class ProgressiveConversationMemory:
                 self.active_tasks[user_id]['result'] = task_result or {}
 
             self.logger.info(f"Completed task for user {user_id}: {completed_task}")
-
-            # Special handling for symptom triage completion
-            if completed_task == 'symptom_triage':
-                # Update button visibility for medicine recommendations
-                self.update_button_visibility(user_id, 'medicine_recommendation')
 
     def update_conversation_stage_db(self, user_id: str, stage: str) -> None:
         """Update conversation stage in database (requires database session)"""
@@ -492,12 +470,6 @@ class ProgressiveConversationMemory:
     def save_to_file(self, filepath: str) -> bool:
         """Save conversation memory to file"""
         try:
-            # Ensure all datetime objects are properly serialized
-            def serialize_datetime(obj):
-                if isinstance(obj, datetime):
-                    return obj.isoformat()
-                raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
-
             data = {
                 'user_profiles': {uid: profile.to_dict() for uid, profile in self.user_profiles.items()},
                 'session_contexts': self.session_contexts,
@@ -505,13 +477,13 @@ class ProgressiveConversationMemory:
                 'conversation_stats': dict(self.conversation_stats),
                 'export_timestamp': datetime.now().isoformat()
             }
-
+            
             with open(filepath, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2, ensure_ascii=False, default=serialize_datetime)
-
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            
             self.logger.info(f"Conversation memory saved to {filepath}")
             return True
-
+            
         except Exception as e:
             self.logger.error(f"Error saving conversation memory: {e}")
             return False
@@ -531,14 +503,6 @@ class ProgressiveConversationMemory:
             self.session_contexts = data.get('session_contexts', {})
             self.active_tasks = data.get('active_tasks', {})
             self.conversation_stats = defaultdict(int, data.get('conversation_stats', {}))
-
-            # Ensure all active tasks have proper datetime objects
-            for task_id, task_data in self.active_tasks.items():
-                if 'started_at' in task_data and isinstance(task_data['started_at'], str):
-                    try:
-                        task_data['started_at'] = datetime.fromisoformat(task_data['started_at'])
-                    except:
-                        task_data['started_at'] = datetime.now()
 
             self.logger.info(f"Conversation memory loaded from {filepath}")
             return True
@@ -813,10 +777,6 @@ class ProgressiveConversationMemory:
             profile.show_prescription_button = True
         elif intent in ['prescription_inquiry', 'find_medicine']:
             # Show both medicine scan and prescription buttons for medicine-related queries
-            profile.show_medicine_scan_button = True
-            profile.show_prescription_button = True
-        elif intent == 'medicine_recommendation':
-            # Show medicine-related buttons for symptom checker recommendations
             profile.show_medicine_scan_button = True
             profile.show_prescription_button = True
 

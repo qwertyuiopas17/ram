@@ -191,7 +191,6 @@ def initialize_ai_components():
     # Model file paths
     nlu_model_path = os.path.join(models_path, 'progressive_nlu_model.pkl')
     memory_model_path = os.path.join(models_path, 'progressive_memory.pkl')
-    conversation_memory_path = os.path.join(models_path, 'conversation_memory.json')
 
     system_status = {
         'nlu_processor': False,
@@ -200,19 +199,6 @@ def initialize_ai_components():
         'database': False,
         'ollama_llama3': sehat_sahara_client.is_available  # reuse flag to show API availability
     }
-
-    # Load conversation memory first
-    logger.info("💾 Loading conversation memory...")
-    try:
-        if os.path.exists(conversation_memory_path):
-            if conversation_memory.load_from_file(conversation_memory_path):
-                logger.info("✅ Conversation memory loaded successfully")
-            else:
-                logger.warning("⚠️ Failed to load conversation memory, starting fresh")
-        else:
-            logger.info("💾 No existing conversation memory file found, starting fresh")
-    except Exception as e:
-        logger.error(f"❌ Error loading conversation memory: {e}")
 
     try:
         # Check Ollama Llama 3 availability (using Sehat Sahara client's flag)
@@ -1204,16 +1190,10 @@ def _get_available_time_slots() -> list:
 # In chatbot.py, replace the existing function
 def _get_or_create_symptom_context(user_id: str, initial_symptom: Optional[str] = None) -> Dict[str, Any]:
     """Retrieves or starts a new symptom checker context, storing symptoms."""
-    # Get current task from conversation memory
-    current_task = conversation_memory.get_current_task(user_id)
-
-    if current_task.get('task') == 'symptom_triage' and current_task.get('context'):
-        context = current_task.get('context')
-        # Ensure symptoms_reported list exists
-        if 'symptoms_reported' not in context:
-            context['symptoms_reported'] = []
-        return context
-
+    task = conversation_memory.get_current_task(user_id)
+    if task.get('task') == 'symptom_triage' and task.get('context'):
+        return task.get('context')
+    
     # Start a new task if one isn't active
     new_context = {
         'turn_count': 0,
@@ -1250,49 +1230,20 @@ def predict():
         if not current_user:
             return jsonify({"error": "User not found.", "login_required": True}), 401
 
-        # Ensure conversation memory is loaded for this user and get current task
-        try:
-            conversation_memory.create_or_get_user(user_id_str)
-            current_task = conversation_memory.get_current_task(user_id_str)
-            task_in_progress = current_task.get('task')
-        except Exception as e:
-            logger.warning(f"Failed to initialize conversation memory for user {user_id_str}: {e}")
-            task_in_progress = None
-
         nlu_understanding = nlu_processor.understand_user_intent(user_message, sehat_sahara_mode=True)
         primary_intent = nlu_understanding.get('primary_intent', 'general_inquiry')
         
-        # Get current task from conversation memory
-        current_task_from_memory = conversation_memory.get_current_task(current_user.patient_id)
-        task_in_progress = current_task_from_memory.get('task') if current_task_from_memory else None
+        task = conversation_memory.get_current_task(current_user.patient_id)
+        task_in_progress = task.get('task')
 
         # --- FIX #1: FLEXIBLE STATE MANAGEMENT ---
         # If the user has a new, unrelated intent, cancel the old task.
         # This prevents the booking/symptom flow from "hijacking" the conversation.
         related_booking_intents = ['appointment_booking', 'SELECT_SPECIALTY', 'SELECT_DOCTOR', 'SELECT_DATE', 'SELECT_TIME', 'SELECT_MODE']
-        related_symptom_intents = ['symptom_triage', 'CONTINUE_SYMPTOM_CHECK']
-
-        # Special handling for symptom triage context
-        if task_in_progress == 'symptom_triage' and primary_intent == 'out_of_scope':
-            # Check if this might be a symptom follow-up that was misclassified
-            symptom_followup_indicators = [
-                'days', 'hours', 'weeks', 'since', 'ago', 'started', 'began',
-                'pain', 'hurt', 'ache', 'feel', 'feeling', 'still', 'now', 'when',
-                'morning', 'night', 'yesterday', 'today', 'severe', 'mild', 'moderate'
-            ]
-            message_words = user_message.lower().split()
-            is_likely_symptom_followup = any(indicator in message_words for indicator in symptom_followup_indicators)
-
-            if is_likely_symptom_followup:
-                logger.info(f"Correcting misclassified symptom follow-up for user {current_user.patient_id}")
-                primary_intent = 'symptom_triage'
-
         is_unrelated_intent = (
             task_in_progress and
             primary_intent not in related_booking_intents and
             button_action not in related_booking_intents and
-            primary_intent not in related_symptom_intents and
-            button_action not in related_symptom_intents and
             primary_intent != task_in_progress
         )
         if is_unrelated_intent:
@@ -1381,29 +1332,25 @@ def predict():
         
         elif task_in_progress == 'symptom_triage':
             symptom_context = _get_or_create_symptom_context(current_user.patient_id)
-            # --- FIX #2: Append the new symptom to our memory ---
+    # --- FIX #2: Append the new symptom to our memory ---
             symptom_context['symptoms_reported'].append(user_message)
             turn_count = symptom_context.get('turn_count', 0)
-
-            # We'll ask 3 follow-up questions total to gather enough information
-            if turn_count < 3:
+    
+    # We'll ask 2 follow-up questions total
+            if turn_count < 2:
                 ai_message_override = f"CONTEXT: This is a symptom check conversation. User replied '{user_message}'. Acknowledge their answer and ask one more simple clarifying question based on the conversation history."
                 symptom_context['turn_count'] = turn_count + 1
                 conversation_memory.set_current_task(current_user.patient_id, 'symptom_triage', symptom_context)
             else:
-                # --- FIX #2: Pass all collected symptoms to the final prompt ---
+        # --- FIX #2: Pass all collected symptoms to the final prompt ---
                 reported_symptoms_str = '; '.join(symptom_context['symptoms_reported'])
                 ai_message_override = (
                     f"CONTEXT: The user has reported the following symptoms: '{reported_symptoms_str}'. "
                     "You have asked enough questions. Provide a simple, safe home remedy for these symptoms. "
                     "Then, you MUST include this exact disclaimer: 'This is not medical advice. For a proper diagnosis, please consult a doctor.' "
-                    "After the remedy and disclaimer, provide guidance on how to use the medicine scan and prescription upload features, "
-                    "then show these interactive buttons for navigation: "
-                    "[{\"text\": \"📷 Scan Medicine\", \"action\": \"START_MEDICINE_SCANNER\", \"parameters\": {}, \"style\": \"primary\"}, "
-                    "{\"text\": \"📤 Upload Prescription\", \"action\": \"UPLOAD_PRESCRIPTION\", \"parameters\": {}, \"style\": \"secondary\"}]. "
-                    "Your final action should be 'SHOW_MEDICINE_REMEDY'."
+                    "Your final action should be 'CONTINUE_CONVERSATION'."
                     )
-                conversation_memory.complete_task(current_user.patient_id)
+                conversation_memory.complete_task(current_user.patient_id) 
 
         # This logic is also now correctly accessed
         else:
@@ -1418,11 +1365,11 @@ def predict():
 
             
             elif primary_intent == 'symptom_triage':
-                # --- FIX #2: Pass the initial symptom when creating the context ---
-                symptom_context = _get_or_create_symptom_context(current_user.patient_id, initial_symptom=user_message)
-                symptom_context['turn_count'] = 1
-                ai_message_override = f"CONTEXT: Start of a symptom check. User said '{user_message}'. Acknowledge their symptom and ask your first clarifying question (e.g., 'For how long?' or 'Is it a sharp or dull pain?')."
-                conversation_memory.set_current_task(current_user.patient_id, 'symptom_triage', symptom_context)
+    # --- FIX #2: Pass the initial symptom when creating the context ---
+                 symptom_context = _get_or_create_symptom_context(current_user.patient_id, initial_symptom=user_message)
+                 symptom_context['turn_count'] = 1
+                 ai_message_override = f"CONTEXT: Start of a symptom check. User said '{user_message}'. Acknowledge their symptom and ask your first clarifying question (e.g., 'For how long?' or 'Is it a sharp or dull pain?')."
+                 conversation_memory.set_current_task(current_user.patient_id, 'symptom_triage', symptom_context)
         
         # ... rest of the function remains the same ...
         # --- AI RESPONSE GENERATION ---
@@ -1436,19 +1383,7 @@ def predict():
             )
             if action_payload_str:
                 try:
-                    # Clean the response string before parsing
-                    cleaned_response = action_payload_str.strip()
-                    if cleaned_response.startswith('"') and cleaned_response.endswith('"'):
-                        cleaned_response = cleaned_response[1:-1]
-                    elif cleaned_response.startswith("'") and cleaned_response.endswith("'"):
-                        cleaned_response = cleaned_response[1:-1]
-
-                    # Remove any markdown formatting
-                    cleaned_response = cleaned_response.replace('```json', '').replace('```', '').strip()
-
-                    action_payload = json.loads(cleaned_response)
-
-                    # Handle booking finalization
+                    action_payload = json.loads(action_payload_str)
                     if action_payload.get("action") == "FINALIZE_BOOKING":
                         booking_context = _get_or_create_booking_context(current_user.patient_id)
                         doc_id = booking_context.get('doctor_id')
@@ -1468,20 +1403,7 @@ def predict():
                             action_payload['response'] = "I'm sorry, there was an error with the booking details. Let's start over."
                             action_payload['action'] = 'BOOKING_FAILED'
                             conversation_memory.complete_task(current_user.patient_id)
-
-                    # Ensure medicine buttons are properly included for symptom checker completion
-                    if action_payload.get("action") == "SHOW_MEDICINE_REMEDY" and "interactive_buttons" not in action_payload:
-                        action_payload["interactive_buttons"] = [
-                            {"text": "📷 Scan Medicine", "action": "START_MEDICINE_SCANNER", "parameters": {}, "style": "primary"},
-                            {"text": "📤 Upload Prescription", "action": "UPLOAD_PRESCRIPTION", "parameters": {}, "style": "secondary"}
-                        ]
-
-                except json.JSONDecodeError as e:
-                    logger.warning(f"Failed to parse AI response as JSON: {e}")
-                    logger.warning(f"Raw AI response: {action_payload_str}")
-                    action_payload = None
-                except Exception as e:
-                    logger.error(f"Error processing AI response: {e}")
+                except json.JSONDecodeError:
                     action_payload = None
         
         if not action_payload:
@@ -1493,23 +1415,6 @@ def predict():
         turn_record = ConversationTurn(user_id=current_user.id, user_message=user_message, bot_response=action_payload_str, detected_intent=primary_intent, action_triggered=action_payload.get('action'))
         db.session.add(turn_record)
         db.session.commit()
-
-        # Handle special medicine remedy action for symptom checker
-        if action_payload.get('action') == 'SHOW_MEDICINE_REMEDY':
-            # Update conversation memory to show medicine buttons
-            conversation_memory.update_button_visibility(current_user.patient_id, 'medicine_recommendation')
-
-        # Ensure conversation memory is saved after each interaction
-        try:
-            conversation_memory.save_to_file(os.path.join(models_path, 'conversation_memory.json'))
-        except Exception as save_error:
-            logger.warning(f"Failed to save conversation memory: {save_error}")
-
-        # Force refresh conversation memory from file to ensure persistence
-        try:
-            conversation_memory.load_from_file(os.path.join(models_path, 'conversation_memory.json'))
-        except Exception as load_error:
-            logger.warning(f"Failed to reload conversation memory: {load_error}")
         
         response_time = time.time() - start_time
         logger.info(f"User {current_user.patient_id} processed in {response_time:.2f}s")
