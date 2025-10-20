@@ -60,6 +60,7 @@ from ko import ProgressiveResponseGenerator
 # from optimized_crisis_detector import OptimizedCrisisDetector  # removed
 
 from api_ollama_integration import sehat_sahara_client, groq_scout
+from conversation_memory import conversation_memory # <--- ADD THIS LINE
 
 
 # Configure comprehensive logging with multiple handlers
@@ -2962,3 +2963,4 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
