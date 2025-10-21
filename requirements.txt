@@ -27,5 +27,9 @@ python-dotenv
 groq
 langdetect
 bcrypt
+pywebpush
+APScheduler
+py-vapid
+
 
 
