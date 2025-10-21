@@ -190,6 +190,8 @@ def check_and_send_reminders():
     with app.app_context():
         try:
             # --- FIX #1: Use timezone-aware datetime ---
+            # Load the latest reminders from the shared file
+            conversation_memory.load_from_file(os.path.join(models_path, 'conversation_memory.json'))
             now_utc = datetime.now(timezone.utc)
             
             for profile in conversation_memory.user_profiles.values():
@@ -3110,6 +3112,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
