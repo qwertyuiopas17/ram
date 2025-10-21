@@ -176,14 +176,10 @@ VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY")
 VAPID_CLAIM_EMAIL = "mailto:youremail@example.com"
 
 if not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY:
-    logger.warning("VAPID keys not found in environment. Generating new keys...")
-    vapid_keys = Vapid.generate()
-    VAPID_PRIVATE_KEY = vapid_keys.private_key
-    VAPID_PUBLIC_KEY = vapid_keys.public_key
-    logger.warning("--- NEW VAPID KEYS GENERATED ---")
-    logger.warning(f"SET VAPID_PRIVATE_KEY='{VAPID_PRIVATE_KEY}'")
-    logger.warning(f"SET VAPID_PUBLIC_KEY='{VAPID_PUBLIC_KEY}'")
-    logger.warning("--- ADD THESE TO YOUR RENDER ENVIRONMENT VARIABLES ---")
+    logger.critical("FATAL ERROR: VAPID_PRIVATE_KEY and VAPID_PUBLIC_KEY are not set in the environment.")
+    logger.critical("Please generate keys using a VAPID key generator and add them to your Render Environment Variables.")
+    # Exit the application if keys are not found, as push notifications cannot work.
+    exit("VAPID keys are not configured. Application cannot start.")
 
 # --- BACKGROUND SCHEDULER FOR SENDING NOTIFICATIONS ---
 scheduler = BackgroundScheduler(daemon=True)
@@ -3106,3 +3102,4 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
