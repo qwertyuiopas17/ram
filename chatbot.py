@@ -249,6 +249,7 @@ def check_and_send_reminders():
                                         logger.info(f"Deleted expired subscription for user {profile.user_id}")
                             
                             reminder['alert_sent'] = True
+                            conversation_memory.save_to_file(os.path.join(models_path, 'conversation_memory.json'))
                 
                 # After checking all reminders for a user, recalculate the next alert
                 #conversation_memory.recalculate_all_next_alerts(profile.user_id)
@@ -3116,6 +3117,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
