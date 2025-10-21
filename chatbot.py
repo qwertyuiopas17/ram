@@ -3,7 +3,7 @@ from flask_cors import CORS
 import os
 import logging
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 import time
 import threading
@@ -183,22 +183,25 @@ if not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY:
 
 # --- BACKGROUND SCHEDULER FOR SENDING NOTIFICATIONS ---
 scheduler = BackgroundScheduler(daemon=True)
+
+# Replace your entire function with this one
 def check_and_send_reminders():
     """The background job that checks for due reminders and sends push notifications."""
     with app.app_context():
         try:
-            now_utc = datetime.utcnow()
+            # --- FIX #1: Use timezone-aware datetime ---
+            now_utc = datetime.now(timezone.utc)
             
             for profile in conversation_memory.user_profiles.values():
-                reminders_to_update = []
                 for reminder in profile.medicine_reminders:
                     if reminder.get('next_alert_utc') and not reminder.get('alert_sent'):
+                        
+                        # --- FIX #2: Correctly parse the aware timestamp ---
                         alert_time_utc = datetime.fromisoformat(reminder['next_alert_utc'])
                         
                         if alert_time_utc <= now_utc:
                             logger.info(f"Alert due for user {profile.user_id} for medicine {reminder['medicine_name']}")
                             
-                            # Find user subscriptions
                             user_db = User.query.filter_by(patient_id=profile.user_id).first()
                             if not user_db:
                                 continue
@@ -206,10 +209,9 @@ def check_and_send_reminders():
                             subscriptions = PushSubscription.query.filter_by(user_id=user_db.id).all()
                             if not subscriptions:
                                 logger.warning(f"No push subscriptions found for user {profile.user_id}")
-                                reminder['alert_sent'] = True # Mark as sent to avoid re-triggering
+                                reminder['alert_sent'] = True
                                 continue
 
-                            # Prepare notification payload
                             push_payload = json.dumps({
                                 "title": "💊 Sehat Sahara Reminder",
                                 "options": {
@@ -226,28 +228,25 @@ def check_and_send_reminders():
                                 }
                             })
 
-                            # Send push to all subscribed devices for this user
                             for sub in subscriptions:
                                 try:
                                     webpush(
                                         subscription_info=json.loads(sub.subscription_info),
                                         data=push_payload,
                                         vapid_private_key=VAPID_PRIVATE_KEY,
-                                        vapid_claims={"sub": VAPID_CLAIM_EMAIL}
+                                        vapid_claims={"sub": "mailto:" + VAPID_CLAIM_EMAIL} # Corrected mailto usage
                                     )
                                     logger.info(f"Push notification sent successfully to a device for user {profile.user_id}")
                                 except WebPushException as ex:
                                     logger.error(f"Failed to send push notification: {ex}")
-                                    # If subscription is invalid, you might want to delete it
                                     if ex.response and ex.response.status_code in [404, 410]:
                                         db.session.delete(sub)
                                         db.session.commit()
                                         logger.info(f"Deleted expired subscription for user {profile.user_id}")
                             
-                            # Mark as sent to prevent re-sending
                             reminder['alert_sent'] = True
                 
-                # After sending, recalculate the next alert time for all reminders
+                # After checking all reminders for a user, recalculate the next alert
                 conversation_memory.recalculate_all_next_alerts(profile.user_id)
 
         except Exception as e:
@@ -3102,6 +3101,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
