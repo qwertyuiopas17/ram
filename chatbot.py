@@ -934,6 +934,8 @@ def manage_medicine_reminders():
         elif action == "add":
             medicine_data = data.get('medicine_data', {})
             conversation_memory.schedule_medicine_reminder(user_id, medicine_data)
+            # --- ADD THIS LINE ---
+            conversation_memory.save_to_file(os.path.join(models_path, 'conversation_memory.json'))
             return jsonify({"success": True, "message": "Reminder scheduled successfully"})
 
         # --- NEW: UPDATE ACTION ---
@@ -944,6 +946,8 @@ def manage_medicine_reminders():
                 return jsonify({"error": "original_medicine_name is required for update"}), 400
             
             conversation_memory.update_medicine_reminder(user_id, original_name, medicine_data)
+            # --- ADD THIS LINE ---
+            conversation_memory.save_to_file(os.path.join(models_path, 'conversation_memory.json'))
             return jsonify({"success": True, "message": "Reminder updated successfully"})
 
         # --- NEW: DELETE ACTION ---
@@ -953,16 +957,21 @@ def manage_medicine_reminders():
                 return jsonify({"error": "medicine_name is required for delete"}), 400
             
             conversation_memory.delete_medicine_reminder(user_id, medicine_name)
+            # --- ADD THIS LINE ---
+            conversation_memory.save_to_file(os.path.join(models_path, 'conversation_memory.json'))
             return jsonify({"success": True, "message": "Reminder deleted successfully"})
 
         elif action == "update_adherence":
             medicine_name = data.get('medicine_name')
             taken_time = data.get('taken_time', datetime.now().strftime('%H:%M'))
             conversation_memory.update_reminder_adherence(user_id, medicine_name, taken_time)
+            # --- ADD THIS LINE ---
+            conversation_memory.save_to_file(os.path.join(models_path, 'conversation_memory.json'))
             return jsonify({"success": True, "message": f"Medicine {medicine_name} marked as taken"})
 
         else:
             return jsonify({"error": "Invalid action."}), 400
+        
 
     except Exception as e:
         logger.error(f"Medicine reminders error: {e}", exc_info=True)
@@ -3101,6 +3110,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
