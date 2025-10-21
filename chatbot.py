@@ -173,7 +173,7 @@ db.init_app(app)
 # as environment variables.
 VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY")
 VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY")
-VAPID_CLAIM_EMAIL = "mailto:youremail@example.com"
+VAPID_CLAIM_EMAIL = "dedpull2005@outlook.com"
 
 if not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY:
     logger.critical("FATAL ERROR: VAPID_PRIVATE_KEY and VAPID_PUBLIC_KEY are not set in the environment.")
@@ -3102,4 +3102,5 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
