@@ -413,7 +413,18 @@ class ProgressiveConversationMemory:
                 'message_count': profile.message_count
             }
         }
-    
+    def recalculate_all_next_alerts(self, user_id: str):
+        """Recalculates the next alert time for all of a user's reminders."""
+        profile = self.create_or_get_user(user_id)
+        for reminder in profile.medicine_reminders:
+            if reminder.get('reminder_enabled', True):
+                user_timezone = reminder.get("timezone", "UTC")
+                times_list = reminder.get("times", [])
+                if times_list:
+                    # Clear the sent flag and calculate the next time
+                    reminder['alert_sent'] = False
+                    reminder['next_alert_utc'] = self._calculate_next_utc_timestamp(times_list, user_timezone)
+                    
     def get_session_context(self, session_id: str) -> Dict[str, Any]:
         """Get context for a specific session"""
         return self.session_contexts.get(session_id, {})

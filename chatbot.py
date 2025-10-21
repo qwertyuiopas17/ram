@@ -50,7 +50,8 @@ def clean_ai_response(text: str) -> str:
 # Import enhanced database models
 from enhanced_database_models import (
     db, User, Doctor, Appointment, HealthRecord, Pharmacy, MedicineOrder,
-    ConversationTurn, UserSession, GrievanceReport, SystemMetrics, init_database, get_user_statistics
+    ConversationTurn, UserSession, GrievanceReport, SystemMetrics, init_database, get_user_statistics,
+    PushSubscription  # <-- Import the new table
 )
 
 # Import enhanced AI components with Ollama integration
@@ -61,6 +62,10 @@ from ko import ProgressiveResponseGenerator
 
 from api_ollama_integration import sehat_sahara_client, groq_scout
 from conversation_memory import conversation_memory # <--- ADD THIS LINE
+# --- NEW IMPORTS FOR PUSH NOTIFICATIONS ---
+from pywebpush import webpush, WebPushException
+from py_vapid import Vapid
+from apscheduler.schedulers.background import BackgroundScheduler
 
 
 # Configure comprehensive logging with multiple handlers
@@ -162,6 +167,101 @@ app.config.update({
 
 # Initialize database
 db.init_app(app)
+# --- VAPID KEYS SETUP FOR PUSH NOTIFICATIONS ---
+# These keys identify your server to push services.
+# In a real production environment, generate these once and store them securely
+# as environment variables.
+VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY")
+VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY")
+VAPID_CLAIM_EMAIL = "mailto:youremail@example.com"
+
+if not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY:
+    logger.warning("VAPID keys not found in environment. Generating new keys...")
+    vapid_keys = Vapid.generate()
+    VAPID_PRIVATE_KEY = vapid_keys.private_key
+    VAPID_PUBLIC_KEY = vapid_keys.public_key
+    logger.warning("--- NEW VAPID KEYS GENERATED ---")
+    logger.warning(f"SET VAPID_PRIVATE_KEY='{VAPID_PRIVATE_KEY}'")
+    logger.warning(f"SET VAPID_PUBLIC_KEY='{VAPID_PUBLIC_KEY}'")
+    logger.warning("--- ADD THESE TO YOUR RENDER ENVIRONMENT VARIABLES ---")
+
+# --- BACKGROUND SCHEDULER FOR SENDING NOTIFICATIONS ---
+scheduler = BackgroundScheduler(daemon=True)
+def check_and_send_reminders():
+    """The background job that checks for due reminders and sends push notifications."""
+    with app.app_context():
+        try:
+            now_utc = datetime.utcnow()
+            
+            for profile in conversation_memory.user_profiles.values():
+                reminders_to_update = []
+                for reminder in profile.medicine_reminders:
+                    if reminder.get('next_alert_utc') and not reminder.get('alert_sent'):
+                        alert_time_utc = datetime.fromisoformat(reminder['next_alert_utc'].replace('Z', ''))
+                        
+                        if alert_time_utc <= now_utc:
+                            logger.info(f"Alert due for user {profile.user_id} for medicine {reminder['medicine_name']}")
+                            
+                            # Find user subscriptions
+                            user_db = User.query.filter_by(patient_id=profile.user_id).first()
+                            if not user_db:
+                                continue
+
+                            subscriptions = PushSubscription.query.filter_by(user_id=user_db.id).all()
+                            if not subscriptions:
+                                logger.warning(f"No push subscriptions found for user {profile.user_id}")
+                                reminder['alert_sent'] = True # Mark as sent to avoid re-triggering
+                                continue
+
+                            # Prepare notification payload
+                            push_payload = json.dumps({
+                                "title": "💊 Sehat Sahara Reminder",
+                                "options": {
+                                    "body": f"It's time to take: {reminder['medicine_name']} ({reminder['dosage']})",
+                                    "icon": "https://i.ibb.co/84XpXLX/hero-pic.png",
+                                    "actions": [
+                                        {"action": "mark-taken", "title": "Mark as Taken"},
+                                        {"action": "close", "title": "Close"}
+                                    ],
+                                    "data": {
+                                        "medicineName": reminder['medicine_name'],
+                                        "userId": profile.user_id
+                                    }
+                                }
+                            })
+
+                            # Send push to all subscribed devices for this user
+                            for sub in subscriptions:
+                                try:
+                                    webpush(
+                                        subscription_info=json.loads(sub.subscription_info),
+                                        data=push_payload,
+                                        vapid_private_key=VAPID_PRIVATE_KEY,
+                                        vapid_claims={"sub": VAPID_CLAIM_EMAIL}
+                                    )
+                                    logger.info(f"Push notification sent successfully to a device for user {profile.user_id}")
+                                except WebPushException as ex:
+                                    logger.error(f"Failed to send push notification: {ex}")
+                                    # If subscription is invalid, you might want to delete it
+                                    if ex.response and ex.response.status_code in [404, 410]:
+                                        db.session.delete(sub)
+                                        db.session.commit()
+                                        logger.info(f"Deleted expired subscription for user {profile.user_id}")
+                            
+                            # Mark as sent to prevent re-sending
+                            reminder['alert_sent'] = True
+                
+                # After sending, recalculate the next alert time for all reminders
+                conversation_memory.recalculate_all_next_alerts(profile.user_id)
+
+        except Exception as e:
+            logger.error(f"Error in background reminder job: {e}", exc_info=True)
+
+
+# Start the background job
+scheduler.add_job(check_and_send_reminders, 'interval', minutes=1)
+scheduler.start()
+atexit.register(lambda: scheduler.shutdown())
 
 # Global system state tracking
 system_state = {
@@ -766,7 +866,50 @@ def handle_post_appointment_feedback():
     except Exception as e:
         logger.error(f"Post-appointment feedback error: {e}")
         return jsonify({"error": "Failed to process feedback"}), 500
+    
+@app.route("/v1/vapid-public-key", methods=["GET"])
+def get_vapid_public_key():
+    """Provide the frontend with the server's public key."""
+    return jsonify({"publicKey": VAPID_PUBLIC_KEY})
 
+@app.route("/v1/subscribe", methods=["POST"])
+def subscribe():
+    """Subscribe a user's device for push notifications."""
+    try:
+        data = request.get_json() or {}
+        subscription_info = data.get("subscription")
+        user_id_str = data.get("userId")
+
+        if not subscription_info or not user_id_str:
+            return jsonify({"error": "Subscription info and userId are required"}), 400
+
+        user = User.query.filter_by(patient_id=user_id_str).first()
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        # Check if this exact subscription already exists to avoid duplicates
+        endpoint = subscription_info.get('endpoint')
+        existing_sub = PushSubscription.query.filter(PushSubscription.subscription_info.like(f'%"{endpoint}"%')).first()
+
+        if existing_sub:
+             logger.info(f"Subscription for endpoint {endpoint} already exists for user {user.patient_id}.")
+             return jsonify({"success": True, "message": "Already subscribed"})
+
+        new_sub = PushSubscription(
+            user_id=user.id,
+            subscription_info=json.dumps(subscription_info)
+        )
+        db.session.add(new_sub)
+        db.session.commit()
+
+        logger.info(f"New push subscription saved for user {user.patient_id}")
+        return jsonify({"success": True, "message": "Subscribed successfully"}), 201
+
+    except Exception as e:
+        logger.error(f"Subscription error: {e}", exc_info=True)
+        db.session.rollback()
+        return jsonify({"error": "Failed to subscribe"}), 500
+    
 @app.route("/v1/medicine-reminders", methods=["POST"])
 def manage_medicine_reminders():
     """
@@ -2963,4 +3106,3 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
-

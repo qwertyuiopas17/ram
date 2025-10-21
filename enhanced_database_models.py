@@ -992,3 +992,18 @@ def seed_initial_pharmacies():
             db.session.add(new_pharmacy)
 
     db.session.commit()
+# In enhanced_database_models.py, add this new class
+
+class PushSubscription(db.Model):
+    """Stores web push subscription details for users"""
+    __tablename__ = 'push_subscriptions'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    subscription_info = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+
+    user = db.relationship('User', backref=db.backref('push_subscriptions', lazy=True, cascade='all, delete-orphan'))
+
+    def __repr__(self):
+        return f'<PushSubscription for User {self.user_id}>'
