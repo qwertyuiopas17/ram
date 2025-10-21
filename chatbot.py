@@ -193,7 +193,7 @@ def check_and_send_reminders():
                 reminders_to_update = []
                 for reminder in profile.medicine_reminders:
                     if reminder.get('next_alert_utc') and not reminder.get('alert_sent'):
-                        alert_time_utc = datetime.fromisoformat(reminder['next_alert_utc'].replace('Z', ''))
+                        alert_time_utc = datetime.fromisoformat(reminder['next_alert_utc'])
                         
                         if alert_time_utc <= now_utc:
                             logger.info(f"Alert due for user {profile.user_id} for medicine {reminder['medicine_name']}")
@@ -3102,5 +3102,6 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
