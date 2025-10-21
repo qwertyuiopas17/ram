@@ -220,7 +220,7 @@ def check_and_send_reminders():
                                 "title": "💊 Sehat Sahara Reminder",
                                 "options": {
                                     "body": f"It's time to take: {reminder['medicine_name']} ({reminder['dosage']})",
-                                    "icon": "https://i.ibb.co/84XpXLX/hero-pic.png",
+                                    "icon": "https://ibb.co/SDRZX99R",
                                     "actions": [
                                         {"action": "mark-taken", "title": "Mark as Taken"},
                                         {"action": "close", "title": "Close"}
@@ -3117,6 +3117,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
