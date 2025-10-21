@@ -212,6 +212,8 @@ def check_and_send_reminders():
                             if not subscriptions:
                                 logger.warning(f"No push subscriptions found for user {profile.user_id}")
                                 reminder['alert_sent'] = True
+                                # --- ADD THIS LINE ---
+                                conversation_memory.save_to_file(os.path.join(models_path, 'conversation_memory.json'))
                                 continue
 
                             push_payload = json.dumps({
@@ -249,7 +251,7 @@ def check_and_send_reminders():
                             reminder['alert_sent'] = True
                 
                 # After checking all reminders for a user, recalculate the next alert
-                conversation_memory.recalculate_all_next_alerts(profile.user_id)
+                #conversation_memory.recalculate_all_next_alerts(profile.user_id)
 
         except Exception as e:
             logger.error(f"Error in background reminder job: {e}", exc_info=True)
@@ -968,6 +970,8 @@ def manage_medicine_reminders():
             taken_time = data.get('taken_time', datetime.now().strftime('%H:%M'))
             conversation_memory.update_reminder_adherence(user_id, medicine_name, taken_time)
             # --- ADD THIS LINE ---
+            # Reschedule the reminder for the next day and save the change
+            conversation_memory.recalculate_all_next_alerts(user_id)
             conversation_memory.save_to_file(os.path.join(models_path, 'conversation_memory.json'))
             return jsonify({"success": True, "message": f"Medicine {medicine_name} marked as taken"})
 
@@ -3112,6 +3116,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
