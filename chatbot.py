@@ -228,7 +228,8 @@ def check_and_send_reminders():
                                     "data": {
                                         "medicineName": reminder['medicine_name'],
                                         "userId": profile.user_id
-                                    }
+                                    },
+                                    "tag": 'medicine-reminder-${reminder['medicine_name']}'
                                 }
                             })
 
@@ -3117,6 +3118,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
