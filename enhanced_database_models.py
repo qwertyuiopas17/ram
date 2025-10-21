@@ -1007,3 +1007,11 @@ class PushSubscription(db.Model):
 
     def __repr__(self):
         return f'<PushSubscription for User {self.user_id}>'
+# In enhanced_database_models.py
+
+# --- ADD THIS NEW CLASS AT THE END OF THE FILE ---
+class KeyValueStore(db.Model):
+    """A simple key-value store to save the memory JSON to the database."""
+    __tablename__ = 'key_value_store'
+    key = db.Column(db.String(100), primary_key=True)
+    value = db.Column(db.Text, nullable=False)
