@@ -399,81 +399,47 @@ class ProgressiveNLUProcessor:
         if model_path and os.path.exists(model_path):
             self.load_nlu_model(model_path)
 
+    # In nlu_processor(2).py
+
     def _test_openrouter_connection(self) -> bool:
-        """Test if OpenRouter API key is valid and connection works."""
+        """Test if the currently active API key is valid and the connection works."""
         try:
+            # --- THIS IS THE FIX ---
+            # Use self.api_key (singular) to get the single, active API key as a string
             headers = {
-                "Authorization": f"Bearer {self.api_keys}",
+                "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }
+            # --- END OF FIX ---
 
-            # Test with a simple models endpoint or chat completion
-            # First try to get models list (some providers support this)
-            try:
-                response = requests.get(
-                    f"{self.openrouter_base_url}/models",
-                    headers=headers,
-                    timeout=10
-                )
+            # Test with a minimal chat completion request
+            payload = {
+                "model": self.openrouter_model,
+                "messages": [{"role": "user", "content": "Hello"}],
+                "max_tokens": 5,
+                "temperature": 0.1
+            }
 
-                if response.status_code == 200:
-                    self.logger.info("✅ OpenRouter API key validated successfully via models endpoint")
-                    return True
+            response = requests.post(
+                f"{self.openrouter_base_url}/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=10
+            )
 
-            except:
-                pass  # Try alternative validation method
+            if response.status_code == 200:
+                self.logger.info("✅ Groq NLU API key validated successfully.")
+                return True
+            elif response.status_code == 401:
+                self.logger.error("❌ Invalid Groq NLU API key - Authentication failed")
+                self.logger.info(f"💡 Key ending in ...{self.api_key[-4:]} might be incorrect or lack credits.")
+                return False
+            else:
+                self.logger.warning(f"⚠️ Groq NLU API test returned status {response.status_code}. Key appears valid but service may have issues.")
+                return True
 
-            # Alternative: Test with a minimal chat completion request
-            try:
-                payload = {
-                    "model": self.openrouter_model,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": "Hello"
-                        }
-                    ],
-                    "max_tokens": 5,
-                    "temperature": 0.1
-                }
-
-                response = requests.post(
-                    f"{self.openrouter_base_url}/chat/completions",
-                    headers=headers,
-                    json=payload,
-                    timeout=10
-                )
-
-                # Check response status codes
-                if response.status_code == 401:
-                    self.logger.error("❌ Invalid OpenRouter API key - Authentication failed")
-                    self.logger.info("💡 Check that your API key is correct and has sufficient credits")
-                    return False
-                elif response.status_code == 403:
-                    self.logger.error("❌ OpenRouter API key forbidden - Access denied")
-                    self.logger.info("💡 Your API key may not have access to this model or endpoint")
-                    return False
-                elif response.status_code == 429:
-                    self.logger.warning("⚠️ OpenRouter API rate limit exceeded")
-                    self.logger.info("💡 Your API key has hit the rate limit but appears valid")
-                    return True  # Key is valid, just rate limited
-                elif response.status_code in [200, 400, 404, 422]:  # Success or client errors (key is likely valid)
-                    self.logger.info("✅ OpenRouter API key appears valid")
-                    return True
-                else:
-                    self.logger.warning(f"⚠️ OpenRouter API test returned status {response.status_code}")
-                    self.logger.info("💡 API key might be valid but service returned unexpected status")
-                    return True  # Assume valid for now
-
-            except requests.exceptions.Timeout:
-                self.logger.warning("⚠️ OpenRouter API test timed out - key might be valid but service slow")
-                return True  # Assume valid if timing out
-            except requests.exceptions.ConnectionError:
-                self.logger.warning("⚠️ OpenRouter API connection error - key might be valid but service unavailable")
-                return True  # Assume valid if connection fails
-
-        except Exception as e:
-            self.logger.error(f"❌ OpenRouter connection test failed: {e}")
+        except requests.exceptions.RequestException as e:
+            self.logger.error(f"❌ Groq NLU connection test failed: {e}")
             return False
 
     def _prepare_openrouter_intent_data(self):
