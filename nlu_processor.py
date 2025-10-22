@@ -26,11 +26,17 @@ class ProgressiveNLUProcessor:
     def __init__(self, model_path: str = None, openrouter_api_key: str = None):
         self.logger = logging.getLogger(__name__)
         self._lock = threading.RLock()
+        # --- UPDATE THIS SECTION ---
+        # Use a different environment variable for clarity, e.g., NLU_API_KEYS
+        # It reads multiple keys separated by commas
+        self.api_keys = [key.strip() for key in os.getenv('NLU_API_KEYS', '').split(',') if key.strip()]
+        self.openrouter_base_url = "https://api.groq.com/openai/v1"
+        self.openrouter_model = "llama-3.1-8b-instant"
 
-        # OpenRouter API configuration
-        self.openrouter_api_key = openrouter_api_key or os.getenv('OPENROUTER_API_KEY')
-        self.openrouter_base_url = "https://openrouter.ai/api/v1"
-        self.openrouter_model = "mistralai/mistral-nemo:free"  # Fast, multilingual model
+        # Key rotation state
+        self.current_key_index = 0
+        self.last_switch_time = 0
+        # --- END OF UPDATE ---
 
         # Initialize OpenRouter for enhanced understanding
         self.openrouter_available = False
@@ -43,15 +49,15 @@ class ProgressiveNLUProcessor:
                 if connection_result:
                     self.use_openrouter = True
                     self.openrouter_available = True
-                    self.logger.info("✅ OpenRouter API connected for enhanced multilingual NLU")
+                    self.logger.info("✅ NLU API connected for enhanced multilingual NLU")
                 else:
-                    self.logger.warning("❌ OpenRouter API key validation failed - check your API key")
+                    self.logger.warning("❌ NLU API key validation failed - check your API key")
                     self.logger.info("💡 To get a valid API key, visit: https://openrouter.ai/keys")
             except Exception as e:
-                self.logger.warning(f"Could not connect to OpenRouter API: {e}")
+                self.logger.warning(f"Could not connect to Groq API: {e}")
                 self.logger.info("🔧 The system will work with enhanced keyword-based classification")
         else:
-            self.logger.warning("⚠️ No OpenRouter API key provided. Enhanced NLU features will be limited.")
+            self.logger.warning("⚠️ No NLU API key provided. Enhanced NLU features will be limited.")
             self.logger.info("💡 Set OPENROUTER_API_KEY environment variable to enable AI-powered features")
 
         # Legacy semantic model fallback (optional)
@@ -494,30 +500,30 @@ This is a {'high priority' if 'urgency_indicators' in data else 'standard'} inte
         except Exception as e:
             self.logger.error(f"Failed to prepare OpenRouter intent data: {e}")
 
-    def _call_openrouter_api(self, prompt: str, max_tokens: int = 150) -> Optional[str]:
-        """Make a call to OpenRouter API with proper error handling."""
+    # In nlu_processor.py, replace the existing function
+
+    def _call_openrouter_api(self, prompt: str, max_tokens: int = 150, retries: int = None) -> Optional[str]:
+        """Make a call to the NLU API with key rotation and retries."""
+        if retries is None:
+            retries = len(self.api_keys) # Set initial retries to the number of keys
+
+        if not self.use_openrouter or not self.api_key or retries <= 0:
+            return None
+
         try:
             headers = {
-                "Authorization": f"Bearer {self.openrouter_api_key}",
+                "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
-                "HTTP-Referer": "https://sehat-sahara.com",
-                "X-Title": "Sehat Sahara Health Assistant"
             }
 
             payload = {
                 "model": self.openrouter_model,
                 "messages": [
-                    {
-                        "role": "system",
-                        "content": "You are an expert multilingual NLU classification system for a health assistance app. You understand English, Hindi, Punjabi, and other languages. Always respond with valid JSON."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
+                    {"role": "system", "content": "You are an expert NLU system. Respond with valid JSON."},
+                    {"role": "user", "content": prompt}
                 ],
                 "max_tokens": max_tokens,
-                "temperature": 0.1,  # Low temperature for consistent classification
+                "temperature": 0.1,
                 "response_format": {"type": "json_object"}
             }
 
@@ -527,23 +533,50 @@ This is a {'high priority' if 'urgency_indicators' in data else 'standard'} inte
                 json=payload,
                 timeout=15
             )
+            
+            if response.status_code == 429:
+                self.logger.warning(f"NLU API rate limit exceeded for key ...{self.api_key[-4:]}.")
+                if self.switch_key():
+                    self.logger.info("Retrying NLU request with new key...")
+                    return self._call_openrouter_api(prompt, max_tokens, retries - 1)
+                else:
+                    self.logger.error("NLU: All API keys are rate-limited or unavailable.")
+                    return None
 
             if response.status_code == 200:
                 result = response.json()
-                if 'choices' in result and len(result['choices']) > 0:
-                    content = result['choices'][0]['message']['content']
-                    return content
+                return result.get("choices", [{}])[0].get("message", {}).get("content")
             else:
-                self.logger.error(f"OpenRouter API error: {response.status_code} - {response.text}")
+                self.logger.error(f"NLU API error: {response.status_code} - {response.text}")
+                return None
 
-        except requests.exceptions.Timeout:
-            self.logger.warning("OpenRouter API request timed out")
-        except requests.exceptions.ConnectionError:
-            self.logger.warning("OpenRouter API connection error")
-        except Exception as e:
-            self.logger.error(f"OpenRouter API call failed: {e}")
+        except requests.exceptions.RequestException as e:
+            self.logger.error(f"NLU API call failed: {e}")
+            return None
+    
+    # In nlu_processor.py, inside the ProgressiveNLUProcessor class
 
-        return None
+    @property
+    def api_key(self):
+        """Returns the currently active API key."""
+        if not self.api_keys:
+            return None
+        return self.api_keys[self.current_key_index]
+
+    def switch_key(self):
+        """Rotates to the next API key in the list."""
+        if time.time() - self.last_switch_time < 10: # 10-second cooldown
+            return False
+
+        if len(self.api_keys) > 1:
+            old_key_preview = f"...{self.api_key[-4:]}" if self.api_key else "None"
+            self.current_key_index = (self.current_key_index + 1) % len(self.api_keys)
+            new_key_preview = f"...{self.api_key[-4:]}" if self.api_key else "None"
+            self.logger.warning(f"NLU: Switching API key from {old_key_preview} to {new_key_preview}")
+            self.last_switch_time = time.time()
+            return True
+        self.logger.warning("NLU: No alternative API keys available to switch to.")
+        return False
 
     def _build_semantic_embeddings(self):
         """Build enhanced semantic embeddings for each intent category using diverse examples"""
