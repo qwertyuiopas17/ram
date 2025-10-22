@@ -1391,6 +1391,7 @@ def _get_or_create_symptom_context(user_id: str, initial_symptom: Optional[str] 
     return {'turn_count': 0, 'symptoms_reported': []}
 
 # In chatbot.py
+# In chatbot.py
 
 @app.route("/v1/predict", methods=["POST"])
 def predict():
@@ -1546,22 +1547,17 @@ def predict():
             if hasattr(initialize_ai_components, '_conversation_memory'):
                 initialize_ai_components._conversation_memory.set_current_task(current_user.patient_id, 'appointment_booking', booking_context)
         
-        # This logic is now correctly accessed if the booking task was cleared above
-        
         elif task_in_progress == 'symptom_triage':
             symptom_context = _get_or_create_symptom_context(current_user.patient_id)
-            # --- FIX #2: Append the new symptom to our memory ---
             symptom_context['symptoms_reported'].append(user_message)
             turn_count = symptom_context.get('turn_count', 0)
 
-            # We'll ask 3 follow-up questions total to gather enough information
             if turn_count < 3:
                 ai_message_override = f"CONTEXT: This is a symptom check conversation. User replied '{user_message}'. Acknowledge their answer and ask one more simple clarifying question based on the conversation history."
                 symptom_context['turn_count'] = turn_count + 1
                 if hasattr(initialize_ai_components, '_conversation_memory'):
                     initialize_ai_components._conversation_memory.set_current_task(current_user.patient_id, 'symptom_triage', symptom_context)
             else:
-                # --- FIX #2: Pass all collected symptoms to the final prompt ---
                 reported_symptoms_str = '; '.join(symptom_context['symptoms_reported'])
                 ai_message_override = (
                     f"CONTEXT: The user has reported the following symptoms: '{reported_symptoms_str}'. "
@@ -1576,7 +1572,6 @@ def predict():
                 if hasattr(initialize_ai_components, '_conversation_memory'):
                     initialize_ai_components._conversation_memory.complete_task(current_user.patient_id)
 
-        # This logic is also now correctly accessed
         else:
             if primary_intent == 'appointment_booking':
                 booking_context = _get_or_create_booking_context(current_user.patient_id)
@@ -1588,16 +1583,13 @@ def predict():
                 if hasattr(initialize_ai_components, '_conversation_memory'):
                     initialize_ai_components._conversation_memory.set_current_task(current_user.patient_id, 'appointment_booking', booking_context)
 
-
             elif primary_intent == 'symptom_triage':
-                # --- FIX #2: Pass the initial symptom when creating the context ---
                 symptom_context = _get_or_create_symptom_context(current_user.patient_id, initial_symptom=user_message)
                 symptom_context['turn_count'] = 1
                 ai_message_override = f"CONTEXT: Start of a symptom check. User said '{user_message}'. Acknowledge their symptom and ask your first clarifying question (e.g., 'For how long?' or 'Is it a sharp or dull pain?')."
                 if hasattr(initialize_ai_components, '_conversation_memory'):
                     initialize_ai_components._conversation_memory.set_current_task(current_user.patient_id, 'symptom_triage', symptom_context)
         
-        # ... rest of the function remains the same ...
         # --- AI RESPONSE GENERATION ---
         if hasattr(initialize_ai_components, '_conversation_memory'):
             history = initialize_ai_components._conversation_memory.get_conversation_context(current_user.patient_id, turns=8)
@@ -1612,19 +1604,12 @@ def predict():
             )
             if action_payload_str:
                 try:
-                    # Clean the response string before parsing
-                    cleaned_response = action_payload_str.strip()
+                    cleaned_response = action_payload_str.strip().replace('```json', '').replace('```', '').strip()
                     if cleaned_response.startswith('"') and cleaned_response.endswith('"'):
                         cleaned_response = cleaned_response[1:-1]
-                    elif cleaned_response.startswith("'") and cleaned_response.endswith("'"):
-                        cleaned_response = cleaned_response[1:-1]
-
-                    # Remove any markdown formatting
-                    cleaned_response = cleaned_response.replace('```json', '').replace('```', '').strip()
-
+                    
                     action_payload = json.loads(cleaned_response)
 
-                    # Handle booking finalization
                     if action_payload.get("action") == "FINALIZE_BOOKING":
                         booking_context = _get_or_create_booking_context(current_user.patient_id)
                         doc_id = booking_context.get('doctor_id')
@@ -1647,7 +1632,6 @@ def predict():
                             if hasattr(initialize_ai_components, '_conversation_memory'):
                                 initialize_ai_components._conversation_memory.complete_task(current_user.patient_id)
 
-                    # Ensure medicine buttons are properly included for symptom checker completion
                     if action_payload.get("action") == "SHOW_MEDICINE_REMEDY" and "interactive_buttons" not in action_payload:
                         action_payload["interactive_buttons"] = [
                             {"text": "📷 Scan Medicine", "action": "START_MEDICINE_SCANNER", "parameters": {}, "style": "primary"},
@@ -1672,9 +1656,7 @@ def predict():
         db.session.add(turn_record)
         db.session.commit()
 
-        # Handle special medicine remedy action for symptom checker
         if action_payload.get('action') == 'SHOW_MEDICINE_REMEDY':
-            # Update conversation memory to show medicine buttons
             if hasattr(initialize_ai_components, '_conversation_memory'):
                 initialize_ai_components._conversation_memory.update_button_visibility(current_user.patient_id, 'medicine_recommendation')
 
@@ -1684,13 +1666,6 @@ def predict():
                 initialize_ai_components._conversation_memory.save_to_file(os.path.join(models_path, 'conversation_memory.json'))
         except Exception as save_error:
             logger.warning(f"Failed to save conversation memory: {save_error}")
-
-        # Force refresh conversation memory from file to ensure persistence
-        try:
-            if hasattr(initialize_ai_components, '_conversation_memory'):
-                initialize_ai_components._conversation_memory.load_from_file(os.path.join(models_path, 'conversation_memory.json'))
-        except Exception as load_error:
-            logger.warning(f"Failed to reload conversation memory: {load_error}")
         
         response_time = time.time() - start_time
         logger.info(f"User {current_user.patient_id} processed in {response_time:.2f}s")
@@ -1701,9 +1676,6 @@ def predict():
         logger.error(f"FATAL ERROR in /predict endpoint: {e}", exc_info=True)
         db.session.rollback()
         return jsonify({"response": "I'm having a technical issue. Please try again.", "action": "SHOW_APP_FEATURES", "interactive_buttons": []}), 500
-
-
-
 
 @app.route("/v1/book-doctor", methods=["POST"])
 def book_doctor():
@@ -3118,6 +3090,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
