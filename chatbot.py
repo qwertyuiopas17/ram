@@ -1553,10 +1553,21 @@ def predict():
             turn_count = symptom_context.get('turn_count', 0)
 
             if turn_count < 3:
-                ai_message_override = f"CONTEXT: This is a symptom check conversation. User replied '{user_message}'. Acknowledge their answer and ask one more simple clarifying question based on the conversation history."
-                symptom_context['turn_count'] = turn_count + 1
+                # --- THIS IS THE FIX ---
+                # Get the history of symptoms collected so far
+                symptoms_history = "; ".join(symptom_context['symptoms_reported'])
+
+                # Create a new, context-aware prompt for the AI
+                ai_message_override = (
+                    f"CONTEXT: This is a symptom check conversation. The user has already provided this information: '{symptoms_history}'. "
+                    f"Their latest reply is: '{user_message}'. "
+                    "Acknowledge their latest reply and ask the *next* logical clarifying question. "
+                    "DO NOT repeat a question that has already been answered in the history."
+                )
+                # --- END OF FIX ---
                 if hasattr(initialize_ai_components, '_conversation_memory'):
                     initialize_ai_components._conversation_memory.set_current_task(current_user.patient_id, 'symptom_triage', symptom_context)
+        
             else:
                 reported_symptoms_str = '; '.join(symptom_context['symptoms_reported'])
                 ai_message_override = (
@@ -1589,6 +1600,25 @@ def predict():
                 ai_message_override = f"CONTEXT: Start of a symptom check. User said '{user_message}'. Acknowledge their symptom and ask your first clarifying question (e.g., 'For how long?' or 'Is it a sharp or dull pain?')."
                 if hasattr(initialize_ai_components, '_conversation_memory'):
                     initialize_ai_components._conversation_memory.set_current_task(current_user.patient_id, 'symptom_triage', symptom_context)
+            
+            # --- NEW LOGIC FOR GUIDANCE BUTTONS ---
+            elif primary_intent in ['medicine_scan', 'how_to_medicine_scan']:
+                if hasattr(initialize_ai_components, '_conversation_memory'):
+                    initialize_ai_components._conversation_memory.complete_task(current_user.patient_id) # Clear any previous task
+                ai_message_override = (
+                    "CONTEXT: The user wants to scan a medicine. First, provide a brief, friendly guide on how to use the scanner (e.g., 'I can help with that! Just point your camera at the medicine...'). "
+                    "Then, your action MUST be 'SHOW_GUIDANCE' and you MUST include this exact button in the interactive_buttons array: "
+                    '[{"text": "📷 Open Scanner", "action": "START_MEDICINE_SCANNER", "parameters": {}, "style": "primary"}]'
+                )
+
+            elif primary_intent in ['prescription_upload', 'how_to_prescription_upload', 'prescription_inquiry']:
+                if hasattr(initialize_ai_components, '_conversation_memory'):
+                    initialize_ai_components._conversation_memory.complete_task(current_user.patient_id) # Clear any previous task
+                ai_message_override = (
+                    "CONTEXT: The user wants to upload a prescription. First, provide a brief, friendly guide on how to upload (e.g., 'Okay, let\\'s upload your prescription. Make sure the photo is clear...'). "
+                    "Then, your action MUST be 'SHOW_GUIDANCE' and you MUST include this exact button in the interactive_buttons array: "
+                    '[{"text": "📤 Upload Prescription", "action": "UPLOAD_PRESCRIPTION", "parameters": {}, "style": "primary"}]'
+                )
         
         # --- AI RESPONSE GENERATION ---
         if hasattr(initialize_ai_components, '_conversation_memory'):
@@ -3090,6 +3120,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
