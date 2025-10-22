@@ -656,6 +656,8 @@ This is a {'high priority' if 'urgency_indicators' in data else 'standard'} inte
                 for intent, desc in self.intent_descriptions.items()
             ])
 
+            # In nlu_processor.py, inside the _ai_powered_classification function
+
             prompt = f"""
 Analyze this user message in a health assistance app and classify the intent.
 
@@ -681,6 +683,9 @@ Consider:
 - Urgency indicators
 - Conversation flow
 - Only return valid JSON
+
+# --- ADD THIS NEW RULE ---
+- **CRITICAL RULE:** If the CONVERSATION CONTEXT indicates a 'symptom_triage' task is in progress, and the USER MESSAGE is a short follow-up (e.g., 'since yesterday', 'yes', 'and?', 'constant'), you MUST classify the intent as 'symptom_triage'. Do NOT classify it as 'out_of_scope'.
 """
 
             # Call OpenRouter API

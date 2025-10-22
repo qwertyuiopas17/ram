@@ -535,7 +535,13 @@ Sehat Sahara: [Your response here]"""
             "appointment_view": "Help the user see upcoming appointments. Provide clear information.",
             "appointment_cancel": "Help initiate cancellation flow. Be understanding and helpful.",
             "health_record_request": "Help the user access health records; choose appropriate record_type parameter.",
-            "symptom_triage": "Perform symptom assessment for common Indian village diseases: malaria, dengue, typhoid, cholera, tuberculosis, jaundice, gastroenteritis, leptospirosis. Ask about duration, severity, additional symptoms. Provide disease-specific first aid: malaria/dengue - mosquito nets, hydration; typhoid/cholera - clean water, ORS; TB/jaundice - rest, nutrition. ALWAYS include: 'This is not a diagnosis. Please consult a doctor for proper medical advice.' Guide to book appointment if symptoms persist or worsen.",
+            "symptom_triage": (
+                "Perform a conversational symptom check. Ask clarifying questions one by one based on the conversation history. "
+                "If the user's reply is unclear or very short (like 'and?'), don't reset the conversation. Instead, politely ask them to elaborate on their last point or ask the previous question again in a different way. "
+                "For example, say 'I'm sorry, I didn't quite understand. Could you tell me more about the pain?' "
+                "After 3-4 questions, provide a safe home remedy and a strong disclaimer that this is not medical advice and they should see a doctor. "
+                "ALWAYS end by guiding them to book an appointment."
+            ),
             "find_medicine": "Guide to pharmacy search; never prescribe. Be helpful and clear.",
             "prescription_inquiry": "Fetch prescription details; explain simply in user's language.",
             "medicine_scan": "Start medicine scanner; add safety disclaimers.",
