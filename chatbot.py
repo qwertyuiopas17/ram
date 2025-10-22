@@ -316,19 +316,13 @@ def initialize_ai_components():
 
         # Initialize NLU Processor with OpenRouter API support
         logger.info("🧠 Initializing Progressive NLU Processor with OpenRouter AI...")
-        openrouter_api_key = os.getenv('OPENROUTER_API_KEY')
         nlu_processor = ProgressiveNLUProcessor(
-            model_path=nlu_model_path,
-            openrouter_api_key=openrouter_api_key
+            model_path=nlu_model_path
         )
         system_status['nlu_processor'] = True
         logger.info("✅ NLU Processor initialized successfully")
 
-        # Log OpenRouter status
-        if openrouter_api_key and nlu_processor.use_openrouter:
-            logger.info("🚀 OpenRouter AI integration enabled for enhanced multilingual NLU")
-        else:
-            logger.info("⚠️ OpenRouter API key not available - using enhanced keyword-based NLU")
+        
 
         # Initialize Response Generator
         logger.info("💬 Initializing Progressive Response Generator...")
@@ -1087,175 +1081,7 @@ def test_prescription_endpoint():
         ]
     })
 
-@app.route("/v1/test-openrouter-nlu", methods=["POST"])
-def test_openrouter_nlu():
-    """
-    Test endpoint for OpenRouter NLU integration
-    Tests multilingual intent recognition and function display logic
-    """
-    try:
-        data = request.get_json() or {}
-        test_message = data.get("message", "I need to book an appointment with a doctor")
-        language = data.get("language", "en")
-
-        if not test_message:
-            return jsonify({"error": "message is required"}), 400
-
-        # Test the NLU processor
-        if not nlu_processor:
-            return jsonify({
-                "error": "NLU processor not initialized",
-                "openrouter_available": False
-            }), 503
-
-        # Get model info
-        model_info = nlu_processor.get_model_info()
-
-        # Test intent recognition
-        result = nlu_processor.understand_user_intent(test_message)
-
-        if not result:
-            return jsonify({
-                "error": "No result from NLU processor",
-                "model_info": model_info
-            }), 500
-
-        # Test function display logic
-        display_info = nlu_processor.get_display_functions(result)
-
-        # Test cases for validation
-        test_cases = [
-            {
-                "message": "मुझे अपनी दवाई की जानकारी चाहिए",
-                "expected_intent": "prescription_inquiry",
-                "language": "hi"
-            },
-            {
-                "message": "ਮੈਨੂੰ ਡਾਕਟਰ ਨਾਲ ਮਿਲਣਾ ਹੈ",
-                "expected_intent": "appointment_booking",
-                "language": "pa"
-            },
-            {
-                "message": "Having severe chest pain, need urgent help",
-                "expected_intent": "emergency_assistance",
-                "language": "en"
-            }
-        ]
-
-        validation_results = []
-        for test_case in test_cases:
-            test_result = nlu_processor.understand_user_intent(test_case["message"])
-            if test_result:
-                validation_results.append({
-                    "message": test_case["message"],
-                    "expected_intent": test_case["expected_intent"],
-                    "detected_intent": test_result.get("primary_intent"),
-                    "confidence": test_result.get("confidence", 0),
-                    "language_detected": test_result.get("language_detected"),
-                    "success": test_result.get("primary_intent") == test_case["expected_intent"]
-                })
-
-        return jsonify({
-            "success": True,
-            "test_message": test_message,
-            "nlu_result": {
-                "primary_intent": result.get("primary_intent"),
-                "confidence": result.get("confidence"),
-                "language_detected": result.get("language_detected"),
-                "classification_method": result.get("classification_method"),
-                "urgency_level": result.get("urgency_level")
-            },
-            "display_functions": display_info,
-            "model_info": {
-                "openrouter_enabled": model_info["openrouter_enabled"],
-                "classification_method": model_info["classification_method"],
-                "supported_languages": model_info["supported_languages"],
-                "version": model_info["version"]
-            },
-            "validation_tests": validation_results,
-            "summary": {
-                "total_tests": len(validation_results),
-                "successful_tests": sum(1 for v in validation_results if v["success"]),
-                "openrouter_working": model_info["openrouter_enabled"]
-            }
-        })
-
-    except Exception as e:
-        logger.error(f"OpenRouter NLU test error: {e}")
-        return jsonify({
-            "error": f"Test failed: {str(e)}",
-            "success": False
-        }), 500
-
-@app.route("/v1/test-openrouter-nlu", methods=["GET"])
-def test_openrouter_nlu_get():
-    """GET endpoint to check OpenRouter NLU status"""
-    try:
-        if not nlu_processor:
-            return jsonify({
-                "error": "NLU processor not initialized",
-                "openrouter_available": False,
-                "status": "error",
-                "troubleshooting": {
-                    "check_logs": "Look for OpenRouter API key validation errors",
-                    "set_api_key": "Set OPENROUTER_API_KEY environment variable",
-                    "get_api_key": "Visit https://openrouter.ai/keys to get an API key"
-                }
-            }), 503
-
-        model_info = nlu_processor.get_model_info()
-
-        # Additional debugging info
-        api_key_configured = bool(os.getenv('OPENROUTER_API_KEY'))
-        api_key_has_value = bool(nlu_processor.openrouter_api_key)
-        api_validation = nlu_processor.validate_api_key()
-
-        return jsonify({
-            "success": True,
-            "status": "ready",
-            "api_key_status": {
-                "configured": api_key_configured,
-                "has_value": api_key_has_value,
-                "validation_passed": nlu_processor.use_openrouter,
-                "validation_details": api_validation
-            },
-            "model_info": {
-                "openrouter_enabled": model_info["openrouter_enabled"],
-                "classification_method": model_info["classification_method"],
-                "supported_languages": model_info["supported_languages"],
-                "version": model_info["version"],
-                "model": model_info.get("openrouter_model"),
-                "enhanced_features": model_info["enhanced_features"][:5]  # Show first 5 features
-            },
-            "test_endpoints": [
-                "POST /v1/test-openrouter-nlu (test with custom message)",
-                "GET /v1/test-openrouter-nlu (status check)"
-            ],
-            "example_usage": {
-                "test_appointment": "POST with {'message': 'I need to book appointment'}",
-                "test_hindi": "POST with {'message': 'मुझे डॉक्टर से मिलना है'}",
-                "test_punjabi": "POST with {'message': 'ਮੈਨੂੰ ਡਾਕਟਰ ਨਾਲ ਮਿਲਣਾ ਹੈ'}"
-            },
-            "troubleshooting": {
-                "if_api_key_invalid": "Check Render environment variables - ensure OPENROUTER_API_KEY is set correctly",
-                "if_404_error": "Make sure your API key has credits and is not expired",
-                "if_connection_error": "Check if OpenRouter service is available",
-                "get_help": "Visit https://openrouter.ai/keys for API key management"
-            }
-        })
-
-    except Exception as e:
-        logger.error(f"OpenRouter NLU status check error: {e}")
-        return jsonify({
-            "error": f"Status check failed: {str(e)}",
-            "success": False,
-            "status": "error",
-            "troubleshooting": {
-                "check_api_key": "Ensure OPENROUTER_API_KEY is set in Render environment variables",
-                "check_model": "Verify the model name is correct",
-                "check_credits": "Make sure your OpenRouter account has credits"
-            }
-        }), 500
+        
 
 @app.route("/v1/prescription-summary", methods=["POST"])
 def get_prescription_summary():

@@ -23,7 +23,7 @@ class ProgressiveNLUProcessor:
     Processes user commands for health app navigation and task completion.
     """
 
-    def __init__(self, model_path: str = None, openrouter_api_key: str = None):
+    def __init__(self, model_path: str = None, api_keys: str = None):
         self.logger = logging.getLogger(__name__)
         self._lock = threading.RLock()
         # --- UPDATE THIS SECTION ---
@@ -42,7 +42,7 @@ class ProgressiveNLUProcessor:
         self.openrouter_available = False
         self.use_openrouter = False
 
-        if self.openrouter_api_key:
+        if self.api_keys:
             try:
                 # Test API key validity with improved error handling
                 connection_result = self._test_openrouter_connection()
@@ -58,7 +58,7 @@ class ProgressiveNLUProcessor:
                 self.logger.info("🔧 The system will work with enhanced keyword-based classification")
         else:
             self.logger.warning("⚠️ No NLU API key provided. Enhanced NLU features will be limited.")
-            self.logger.info("💡 Set OPENROUTER_API_KEY environment variable to enable AI-powered features")
+            self.logger.info("💡 Set NLU_API_KEY environment variable to enable AI-powered features")
 
         # Legacy semantic model fallback (optional)
         self.sentence_model = None
@@ -403,7 +403,7 @@ class ProgressiveNLUProcessor:
         """Test if OpenRouter API key is valid and connection works."""
         try:
             headers = {
-                "Authorization": f"Bearer {self.openrouter_api_key}",
+                "Authorization": f"Bearer {self.api_keys}",
                 "Content-Type": "application/json"
             }
 
@@ -871,17 +871,17 @@ Consider:
     def validate_api_key(self) -> Dict[str, Any]:
         """Validate the OpenRouter API key and return detailed status."""
         result = {
-            "api_key_configured": bool(self.openrouter_api_key),
+            "api_key_configured": bool(self.api_keys),
             "validation_attempted": False,
             "validation_successful": False,
             "error_details": None,
             "recommendations": []
         }
 
-        if not self.openrouter_api_key:
+        if not self.api_keys:
             result["error_details"] = "No API key provided"
             result["recommendations"] = [
-                "Set OPENROUTER_API_KEY environment variable in Render dashboard",
+                "Set NLU_API_KEYS environment variable in Render dashboard",
                 "Visit https://openrouter.ai/keys to create an API key",
                 "Ensure the API key has sufficient credits"
             ]
