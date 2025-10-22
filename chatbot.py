@@ -1427,6 +1427,8 @@ def predict():
             elif primary_intent == 'symptom_triage':
                 symptom_context = _get_or_create_symptom_context(current_user.patient_id, initial_symptom=user_message)
                 symptom_context['turn_count'] = 1
+                symptom_context.clear() # Clear any old data
+                symptom_context['symptoms_reported'] = [user_message] # Add the first symptom
                 ai_message_override = f"CONTEXT: Start of a symptom check. User said '{user_message}'. Acknowledge their symptom and ask your first clarifying question (e.g., 'For how long?' or 'Is it a sharp or dull pain?')."
                 if hasattr(initialize_ai_components, '_conversation_memory'):
                     initialize_ai_components._conversation_memory.set_current_task(current_user.patient_id, 'symptom_triage', symptom_context)
