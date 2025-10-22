@@ -1549,22 +1549,26 @@ def predict():
         
         elif task_in_progress == 'symptom_triage':
             symptom_context = _get_or_create_symptom_context(current_user.patient_id)
+            
+            # --- FIX 1: Always treat follow-up messages as part of the symptom check ---
+            # This prevents a misclassification from ending the conversation.
+            primary_intent = 'symptom_triage' 
+            
             symptom_context['symptoms_reported'].append(user_message)
             turn_count = symptom_context.get('turn_count', 0)
 
             if turn_count < 3:
-                # --- THIS IS THE FIX ---
-                # Get the history of symptoms collected so far
                 symptoms_history = "; ".join(symptom_context['symptoms_reported'])
-
-                # Create a new, context-aware prompt for the AI
                 ai_message_override = (
                     f"CONTEXT: This is a symptom check conversation. The user has already provided this information: '{symptoms_history}'. "
                     f"Their latest reply is: '{user_message}'. "
                     "Acknowledge their latest reply and ask the *next* logical clarifying question. "
                     "DO NOT repeat a question that has already been answered in the history."
                 )
-                # --- END OF FIX ---
+                
+                # --- FIX 2: Correctly increment the turn counter ---
+                symptom_context['turn_count'] = turn_count + 1 
+                
                 if hasattr(initialize_ai_components, '_conversation_memory'):
                     initialize_ai_components._conversation_memory.set_current_task(current_user.patient_id, 'symptom_triage', symptom_context)
         
@@ -1654,6 +1658,8 @@ def predict():
                             update_system_state('book_doctor', appointments_booked=1)
                             action_payload['response'] = f"Your appointment with Dr. {doctor.full_name} is confirmed for {appt_datetime.strftime('%A, %b %d at %I:%M %p')}."
                             action_payload['action'] = 'BOOKING_SUCCESS'
+                            # Clear the old "Confirm Booking" buttons from the response
+                            action_payload['interactive_buttons'] = []
                             if hasattr(initialize_ai_components, '_conversation_memory'):
                                 initialize_ai_components._conversation_memory.complete_task(current_user.patient_id)
                         else:
@@ -3120,6 +3126,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
