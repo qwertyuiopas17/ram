@@ -2121,7 +2121,18 @@ def trigger_sos():
     try:
         # In a real app, you would filter for users with the 'saathi' role
         # For this demo, we notify all subscribed users.
-        subscriptions = PushSubscription.query.all()
+        saathi_users = User.query.filter_by(role='saathi').all()
+        if not saathi_users:
+            logger.warning("SOS triggered, but no users with the 'saathi' role were found to notify.")
+            return jsonify({"success": True, "message": "SOS event created, but no Saathis found."})
+
+        saathi_user_ids = [user.id for user in saathi_users]
+
+
+        subscriptions = PushSubscription.query.filter(PushSubscription.user_id.in_(saathi_user_ids)).all()
+        if not subscriptions:
+            logger.warning(f"Found {len(saathi_users)} Saathis, but none have active push subscriptions.")
+        
         
         push_payload = json.dumps({
             "title": "🚨 EMERGENCY ALERT 🚨",
@@ -3110,6 +3121,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
