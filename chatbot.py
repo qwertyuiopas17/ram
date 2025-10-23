@@ -1472,22 +1472,27 @@ def predict():
                     
                     action_payload = json.loads(cleaned_response)
 
+                    # In the /v1/predict function
+
                     if action_payload.get("action") == "FINALIZE_BOOKING":
                         booking_context = _get_or_create_booking_context(current_user.patient_id)
                         doc_id = booking_context.get('doctor_id')
                         appt_date = booking_context.get('date')
                         appt_time_str = booking_context.get('time')
                         doctor = Doctor.query.filter_by(doctor_id=doc_id).first()
+
                         if all([doctor, appt_date, appt_time_str]):
+                            # --- FIX: Instead of saving, package the data for the frontend ---
                             appt_datetime = datetime.fromisoformat(f"{appt_date}T{appt_time_str}:00")
-                            new_appt = Appointment(user_id=current_user.id, doctor_id=doctor.id, appointment_datetime=appt_datetime, appointment_type=booking_context.get('mode', 'Video Call'), chief_complaint=f"Consultation for {booking_context.get('specialty')}", status='confirmed')
-                            db.session.add(new_appt)
-                            db.session.commit()
-                            update_system_state('book_doctor', appointments_booked=1)
-                            action_payload['response'] = f"Your appointment with Dr. {doctor.full_name} is confirmed for {appt_datetime.strftime('%A, %b %d at %I:%M %p')}."
-                            action_payload['action'] = 'BOOKING_SUCCESS'
-                            # Clear the old "Confirm Booking" buttons from the response
-                            action_payload['interactive_buttons'] = []
+                            
+                            action_payload['response'] = f"Great! I'm confirming your appointment with Dr. {doctor.full_name} for {appt_datetime.strftime('%A, %b %d at %I:%M %p')}. One moment..."
+                            action_payload['action'] = 'EXECUTE_BOOKING' # New action for the frontend
+                            action_payload['parameters'] = {
+                                'doctorId': doctor.id, # Use the integer ID for the reliable endpoint
+                                'appointmentDatetime': appt_datetime.isoformat(),
+                                'appointmentType': booking_context.get('mode', 'Video Call'),
+                                'chiefComplaint': f"Consultation for {booking_context.get('specialty')}"
+                            }
                             if hasattr(initialize_ai_components, '_conversation_memory'):
                                 initialize_ai_components._conversation_memory.complete_task(current_user.patient_id)
                         else:
@@ -2999,6 +3004,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
