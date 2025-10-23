@@ -238,47 +238,45 @@ class GroqScoutClient:
 
     # In api_ollama_integration.py, inside the GroqScoutClient class
 
-def interpret_prescription_image(self, image_b64: str, language: str = "en") -> Optional[Dict[str, Any]]:
-    """Interpret prescription image and extract structured data"""
+    def interpret_prescription_image(self, image_b64: str, language: str = "en") -> Optional[Dict[str, Any]]:
+        """Interpret prescription image and extract structured data"""
     # A more forceful prompt to get JSON
-    system_prompt = (
-        "You are a prescription analysis AI. Your ONLY job is to analyze the image and respond with a single, valid JSON object. "
-        "Do not add any text, explanation, or markdown before or after the JSON. Your entire output must be the JSON itself."
-        'The JSON format MUST be: {"doctor_name": "...", "medications": [{"name": "...", "dosage": "...", "time": "..."}], "tests": ["..."], "diagnosis": "..."}'
-        "\nIf any information is unreadable, use empty strings or empty arrays for the corresponding fields."
-    )
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": [
-            {"type": "text", "text": "Analyze this prescription and return only the JSON."},
-            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}}
-        ]}
-    ]
-    payload = {"model": self.model, "messages": messages, "max_tokens": 500, "temperature": 0.1}
-    
-    result = self._post("/chat/completions", payload, timeout=120)
-    
-    if not result:
-        self.logger.warning("AI did not return any result for prescription analysis.")
-        return None
+        system_prompt = (
+            "You are a prescription analysis AI. Your ONLY job is to analyze the image and respond with a single, valid JSON object. "
+            "Do not add any text, explanation, or markdown before or after the JSON. Your entire output must be the JSON itself."
+            'The JSON format MUST be: {"doctor_name": "...", "medications": [{"name": "...", "dosage": "...", "time": "..."}], "tests": ["..."], "diagnosis": "..."}'
+            "\nIf any information is unreadable, use empty strings or empty arrays for the corresponding fields."
+            )
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": [
+                {"type": "text", "text": "Analyze this prescription and return only the JSON."},
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}}
+            ]}
+        ]
+        payload = {"model": self.model, "messages": messages, "max_tokens": 500, "temperature": 0.1}
+        result = self._post("/chat/completions", payload, timeout=120)
+        if not result:
+            self.logger.warning("AI did not return any result for prescription analysis.")
+            return None
 
-    content = result.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+        content = result.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
 
     # --- FIX: ADD ROBUST JSON EXTRACTION ---
-    json_match = re.search(r'\{.*\}', content, re.DOTALL)
-    if not json_match:
-        self.logger.warning(f"No JSON object found in AI response. Response was: {content}")
-        return None
+        json_match = re.search(r'\{.*\}', content, re.DOTALL)
+        if not json_match:
+            self.logger.warning(f"No JSON object found in AI response. Response was: {content}")
+            return None
     
-    json_str = json_match.group(0)
-    try:
+        json_str = json_match.group(0)
+        try:
         # Successfully extracted and parsed the JSON
-        parsed_json = json.loads(json_str)
-        self.logger.info("Successfully parsed JSON from prescription image analysis.")
-        return parsed_json
-    except json.JSONDecodeError as e:
-        self.logger.error(f"Failed to decode extracted JSON from AI response. String was: {json_str}. Error: {e}")
-        return None
+            parsed_json = json.loads(json_str)
+            self.logger.info("Successfully parsed JSON from prescription image analysis.")
+            return parsed_json
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Failed to decode extracted JSON from AI response. String was: {json_str}. Error: {e}")
+            return None
     # --- END OF FIX ---
 
 class SehatSaharaApiClient:
