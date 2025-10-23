@@ -673,7 +673,7 @@ def login():
             ).first()
             user_type = 'saathi'
         # --- END NEW BLOCK ---
-        
+
         else:
             user_obj = User.query.filter(
                 (User.email == login_identifier.lower()) | (User.patient_id == login_identifier.upper())
@@ -698,6 +698,13 @@ def login():
                 response_data['message'] = f"Welcome back, {user_obj.name}!"
                 response_data['redirect'] = "/store.html" # Redirect to pharmacy dashboard
                 user_data = {"pharmacyId": user_obj.pharmacy_id, "username": user_obj.name, "role": "pharmacy"}
+            
+            # --- ADD THIS NEW BLOCK for the response ---
+            elif user_type == 'saathi':
+                session['patient_id'] = user_obj.patient_id # Use patient_id for consistency
+                response_data['message'] = f"Welcome back, {user_obj.full_name}!"
+                user_data = {"patientId": user_obj.patient_id, "username": user_obj.full_name, "role": "saathi"}
+                
             else: # Patient
                 session['patient_id'] = user_obj.patient_id
                 user_obj.update_last_login()
