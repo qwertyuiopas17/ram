@@ -1546,52 +1546,60 @@ def predict():
         db.session.rollback()
         return jsonify({"response": "I'm having a technical issue. Please try again.", "action": "SHOW_APP_FEATURES", "interactive_buttons": []}), 500
 
+# In chatbot.py, replace the whole book_doctor function with this one
 @app.route("/v1/book-doctor", methods=["POST"])
 def book_doctor():
     try:
         update_system_state('book_doctor')
         data = request.get_json() or {}
 
-        # --- CORRECTED LOGIC ---
-        # First, try to get the user from the active session
+        # --- CORRECTED LOGIC (User Authentication - No change needed here) ---
         user = get_current_user()
-
-        # If no user is found in the session, fall back to the userId from the request
         if not user:
             user_id_param = data.get("userId")
             if user_id_param:
-                # Query the database using the patient_id
                 user = User.query.filter_by(patient_id=user_id_param).first()
-
-        # If still no user is found, then authentication fails
         if not user:
             return jsonify({"success": False, "message": "Authentication required or user not found"}), 401
         # --- END OF CORRECTION ---
 
-        doctor_id_str = (data.get("doctorId") or "").strip()
+        # --- FIX: Handle doctorId being either int or string ---
+        doctor_id_val = data.get("doctorId") # Get the value (could be int or str)
+        if doctor_id_val is None:
+             # If doctorId is missing entirely, return an error
+             return jsonify({"success": False, "message": "doctorId is required"}), 400
+        # Convert it to string *before* stripping
+        doctor_id_str = str(doctor_id_val).strip()
+        # --- END OF FIX ---
+
         appointment_dt = (data.get("appointmentDatetime") or "").strip()
         appointment_type = (data.get("appointmentType") or "consultation").strip()
         chief_complaint = (data.get("chiefComplaint") or "").strip()
         symptoms = data.get("symptoms") or []
 
+        # This check now uses the guaranteed string version
         if not doctor_id_str or not appointment_dt:
             return jsonify({"success": False, "message": "doctorId and appointmentDatetime are required"}), 400
 
+        # This query works fine with the string ID or the integer ID representation
         doctor = Doctor.query.filter(
-            (Doctor.doctor_id == doctor_id_str) | (Doctor.id == doctor_id_str)
+            (Doctor.doctor_id == doctor_id_str) | (Doctor.id == doctor_id_str) # Check both possible ID types
         ).first()
         if not doctor:
+            # You might want to log the doctor_id_str here for debugging if this fails
+            logger.warning(f"Doctor not found for ID: {doctor_id_str}")
             return jsonify({"success": False, "message": "Doctor not found"}), 404
 
-        # Parse datetime in ISO format
+        # Parse datetime (No change needed here)
         try:
             when = datetime.fromisoformat(appointment_dt)
         except Exception:
             return jsonify({"success": False, "message": "Invalid appointmentDatetime. Use ISO 8601 format."}), 400
 
+        # Create Appointment (No change needed here)
         appt = Appointment(
             user_id=user.id,
-            doctor_id=doctor.id,
+            doctor_id=doctor.id, # Use doctor.id (integer primary key) for the foreign key relationship
             appointment_datetime=when,
             appointment_type=appointment_type,
             chief_complaint=chief_complaint
@@ -1599,36 +1607,38 @@ def book_doctor():
         appt.set_symptoms(symptoms)
         db.session.add(appt)
 
-        # Update session counters
+        # Update session counters (Keep this important part!)
         try:
             session_record_id = session.get('session_record_id')
             if session_record_id:
                 s = UserSession.query.get(session_record_id)
                 if s:
                     s.appointments_booked_in_session += 1
-        except Exception:
-            pass
+        except Exception as session_error:
+            # Log session update errors but don't fail the whole request
+            logger.error(f"Failed to update session counter: {session_error}")
+            pass # Continue even if session update fails
 
         db.session.commit()
         update_system_state('book_doctor', appointments_booked=1)
 
+        # Return success response (No change needed here)
         return jsonify({
             "success": True,
             "message": "Appointment created.",
             "appointment": {
                 "appointmentId": appt.appointment_id,
                 "doctor": {"id": doctor.doctor_id, "name": doctor.full_name, "specialization": doctor.specialization},
-                "datetime": appt.appointment_datetime.isoformat() + "Z", # Append 'Z' for UTC
-                # --- END OF CORRECTION ---
+                "datetime": appt.appointment_datetime.isoformat() + "Z",
                 "type": appt.appointment_type,
                 "status": appt.status
             }
         })
 
     except Exception as e:
-        logger.error(f"Book doctor error: {e}")
-        logger.error(traceback.format_exc())
+        logger.error(f"Book doctor error: {e}", exc_info=True) # Use exc_info for full traceback
         update_system_state('book_doctor', success=False)
+        db.session.rollback() # Ensure rollback on any exception during the process
         return jsonify({"success": False, "message": "Failed to book appointment due to a server error."}), 500
 
 @app.route("/v1/complete-appointment", methods=["POST"])
@@ -3004,6 +3014,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
