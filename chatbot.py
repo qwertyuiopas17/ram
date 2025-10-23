@@ -2605,7 +2605,7 @@ def upload_prescription():
         # 3. Save this payload as a new turn in the conversation history database
         new_turn = ConversationTurn(
             user_id=user.id,
-            user_message="[System] A new prescription was uploaded.",
+            user_message="",
             bot_response=json.dumps(bot_payload),
             detected_intent='prescription_upload',
             action_triggered='SHOW_PRESCRIPTION_SUMMARY',
