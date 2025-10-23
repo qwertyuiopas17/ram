@@ -773,6 +773,7 @@ def init_database(app):
         # --- ADD THESE TWO LINES ---
         # Seed initial pharmacies if they don't exist
         seed_initial_pharmacies()
+        seed_initial_saathis() # <-- ADD THIS LINE
 
         # Set default time slots configuration if not exists
         if not SystemConfiguration.query.filter_by(config_key='available_time_slots').first():
@@ -958,6 +959,34 @@ def seed_initial_doctors():
             if updated:
                 db.session.add(existing_doctor)
 
+    db.session.commit()
+
+def seed_initial_saathis():
+    """Seed initial Saathi users into the database."""
+    saathis_to_add = [
+        {
+            "patient_id": "SAATHI001",
+            "full_name": "Rohan Sharma (Saathi)",
+            "email": "saathi.rohan@sehara.com",
+            "password": "password123",
+            "role": "saathi" # CRITICAL: Set the role correctly
+        }
+        # You can add more Saathi users here
+    ]
+
+    for saathi_data in saathis_to_add:
+        existing_user = User.query.filter_by(patient_id=saathi_data["patient_id"]).first()
+        if not existing_user:
+            new_saathi = User(
+                patient_id=saathi_data["patient_id"],
+                full_name=saathi_data["full_name"],
+                email=saathi_data["email"],
+                role=saathi_data["role"],
+                is_active=True
+            )
+            new_saathi.set_password(saathi_data["password"])
+            db.session.add(new_saathi)
+    
     db.session.commit()
 
 def seed_initial_pharmacies():
