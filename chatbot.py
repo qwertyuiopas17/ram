@@ -2558,7 +2558,6 @@ def upload_prescription():
         db.session.add(record)
         try:
             db.session.commit()
-
             logger.info(f"✅ Prescription uploaded for user {user.patient_id}, record_id: {record.record_id}")
 
             # Auto-generate medicine reminders from prescription
@@ -2590,33 +2589,6 @@ def upload_prescription():
         summary_response = response_generator.generate_prescription_summary_response(
             prescription_data, user.preferred_language
         )
-        # --- FIX: ADD THIS ENTIRE BLOCK ---
-
-    
-
-        # 2. Create the JSON payload that represents the bot's message
-        bot_payload = {
-            "response": summary_response,
-            "action": "SHOW_PRESCRIPTION_SUMMARY",
-            "parameters": {},
-            "interactive_buttons": []
-        }
-
-        # 3. Save this payload as a new turn in the conversation history database
-        new_turn = ConversationTurn(
-            user_id=user.id,
-            user_message="",
-            bot_response=json.dumps(bot_payload),
-            detected_intent='prescription_upload',
-            action_triggered='SHOW_PRESCRIPTION_SUMMARY',
-            timestamp=datetime.now()
-        )
-        db.session.add(new_turn)
-        db.session.commit()
-        
-        logger.info(f"✅ Prescription summary saved to conversation history for user {user.patient_id}")
-        
-        # --- END OF FIX ---
 
         return jsonify({
             "success": True,
