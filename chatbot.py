@@ -1669,7 +1669,52 @@ def complete_appointment():
     except Exception as e:
         logger.error(f"Complete appointment error: {e}")
         return jsonify({"success": False, "message": "Failed to complete appointment"}), 500
+# Add this entire new function to chatbot.py
 
+@app.route("/v1/scan-medicine", methods=["POST"])
+def scan_medicine():
+    """
+    Handles medicine scanning from an image using AI analysis.
+    """
+    try:
+        update_system_state('scan_medicine')
+        data = request.get_json() or {}
+        image_data = data.get("imageData")
+        user_message = data.get("message", "Please identify this medicine from the image.")
+
+        if not image_data:
+            return jsonify({"success": False, "error": "No image data was provided."}), 400
+
+        # Check if the AI client for image analysis is available
+        if groq_scout and groq_scout.is_available:
+            # Clean the "data:image/jpeg;base64," prefix from the image data string
+            if "," in image_data:
+                image_data_clean = image_data.split(",", 1)[1]
+            else:
+                image_data_clean = image_data
+
+            # Call the AI to interpret the image
+            analysis_result = groq_scout.interpret_medicine_image(
+                user_message=user_message,
+                image_b64=image_data_clean,
+                language="en"
+            )
+
+            if analysis_result:
+                return jsonify({
+                    "success": True,
+                    "medicine_info": analysis_result
+                })
+            else:
+                return jsonify({"success": False, "error": "AI analysis failed to identify the medicine."}), 500
+        else:
+            return jsonify({"success": False, "error": "The image analysis service is currently unavailable."}), 503
+
+    except Exception as e:
+        logger.error(f"❌ Scan medicine error: {e}", exc_info=True)
+        update_system_state('scan_medicine', success=False)
+        return jsonify({"success": False, "error": "An internal server error occurred during the scan."}), 500
+        
 @app.route("/v1/history", methods=["POST"])
 def get_history():
     """Get comprehensive conversation history with analytics"""
