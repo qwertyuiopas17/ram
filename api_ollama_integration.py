@@ -161,7 +161,7 @@ class ApiClient:
 
 class GroqScoutClient:
     """Client for openrouter's Llama 4 Scout (used for emoji/image interpretation)."""
-    def __init__(self, api_key: str = None, base_url: str = "https://openrouter.ai/api/v1", model: str = "qwen/qwen2.5-vl-72b-instruct:free"):
+    def __init__(self, api_key: str = None, base_url: str = "https://openrouter.ai/api/v1", model: str = "qwen/qwen2.5-vl-32b-instruct:free"):
         # Separate API key to allow different security policy if desired
         self.api_key = api_key or os.getenv('GROQ_SCOUT_API_KEY') or os.getenv('GROQ_API_KEY') or os.getenv('API_KEY')
         self.base_url = base_url
