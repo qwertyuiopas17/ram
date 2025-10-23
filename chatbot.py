@@ -664,6 +664,16 @@ def login():
                 (Pharmacy.email == login_identifier.lower()) | (Pharmacy.pharmacy_id == login_identifier.upper())
             ).first()
             user_type = 'pharmacy'
+        
+        # --- ADD THIS NEW BLOCK ---
+        elif role == 'saathi':
+            user_obj = User.query.filter(
+                ((User.email == login_identifier.lower()) | (User.patient_id == login_identifier.upper()))
+                & (User.role == 'saathi') # Make sure they actually have the saathi role
+            ).first()
+            user_type = 'saathi'
+        # --- END NEW BLOCK ---
+        
         else:
             user_obj = User.query.filter(
                 (User.email == login_identifier.lower()) | (User.patient_id == login_identifier.upper())
