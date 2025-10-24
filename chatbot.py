@@ -2350,14 +2350,16 @@ def get_doctors():
         doctors_data = []
         for doctor in doctors:
             doctors_data.append({
-                "id": doctor.doctor_id,
+                # --- THIS IS THE FIX ---
+                "id": doctor.id,  # Use the integer primary key
                 "name": doctor.full_name,
                 "specialization": doctor.specialization,
                 "qualification": doctor.qualification,
                 "experience": doctor.experience_years,
                 "clinicName": doctor.clinic_name,
                 "rating": doctor.average_rating,
-                "languages": doctor.get_languages_spoken()
+                "languages": doctor.get_languages_spoken(),
+                "doctor_id_str": doctor.doctor_id
             })
 
         return jsonify({
@@ -3132,6 +3134,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
