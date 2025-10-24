@@ -467,29 +467,27 @@ def track_system_metrics():
 def get_current_user():
     """Security helper to get current authenticated user for any role."""
     try:
+        user_pk_id = session.get('user_id')
         role = session.get('role')
-        if not role:
+
+        if not user_pk_id or not role:
             return None
 
         if role == 'doctor':
-            doctor_id = session.get('doctor_id')
-            if doctor_id:
-                return Doctor.query.filter_by(doctor_id=doctor_id, is_active=True).first()
+            doctor_id_str = session.get('doctor_id')
+            return Doctor.query.filter_by(doctor_id=doctor_id_str, is_active=True).first()
 
         elif role == 'pharmacy':
-            pharmacy_id = session.get('pharmacy_id')
-            if pharmacy_id:
-                return Pharmacy.query.filter_by(pharmacy_id=pharmacy_id, is_active=True).first()
-
-        else: # Default to patient
-            user_id = session.get('user_id')
-            if user_id:
-                user = User.query.filter_by(id=user_id, is_active=True).first()
-                if user:
-                    user.role = getattr(user, 'role', 'patient')
+            pharmacy_id_str = session.get('pharmacy_id')
+            return Pharmacy.query.filter_by(pharmacy_id=pharmacy_id_str, is_active=True).first()
+        
+        elif role in ['patient', 'saathi', 'admin']:
+            user = User.query.filter_by(id=user_pk_id, is_active=True).first()
+            if user and user.role == role:
                 return user
         
         return None
+        
     except Exception as e:
         logger.error(f"Unexpected error in get_current_user: {e}")
         return None
@@ -667,6 +665,7 @@ def login():
         
         # --- ADD THIS NEW BLOCK ---
         elif role == 'saathi':
+            
             user_obj = User.query.filter(
                 ((User.email == login_identifier.lower()) | (User.patient_id == login_identifier.upper()))
                 & (User.role == 'saathi') # Make sure they actually have the saathi role
@@ -703,7 +702,7 @@ def login():
             elif user_type == 'saathi':
                 session['patient_id'] = user_obj.patient_id # Use patient_id for consistency
                 response_data['message'] = f"Welcome back, {user_obj.full_name}!"
-                user_data = {"patientId": user_obj.patient_id, "username": user_obj.full_name, "role": "saathi"}
+                user_data = {"patientId": user_obj.patient_id, "fullName": user_obj.full_name, "role": "saathi"}
                 
             else: # Patient
                 session['patient_id'] = user_obj.patient_id
@@ -2872,6 +2871,7 @@ def get_doctor_dashboard():
                 "id": appt.appointment_id,
                 "patient": patient.full_name if patient else "Unknown",
                 "time": appt.appointment_datetime.strftime('%I:%M %p'),
+                "dateTime": appt.appointment_datetime.isoformat() + "Z", # <-- ADD THIS LINE
                 "type": appt.appointment_type,
                 "status": appt.status
             })
@@ -3138,6 +3138,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
