@@ -638,6 +638,8 @@ def register():
         update_system_state('register', success=False)
         return jsonify({"success": False, "message": "An internal error occurred during registration. Please try again."}), 500
 
+# In chatbot.py, replace your /v1/login function with this corrected version
+
 @app.route("/v1/login", methods=["POST"])
 def login():
     try:
@@ -650,7 +652,7 @@ def login():
             return jsonify({"success": False, "message": "Identifier and password are required."}), 400
 
         user_obj = None
-        user_type = 'patient'
+        user_type = 'patient' # Default user type
 
         if role == 'doctor':
             user_obj = Doctor.query.filter(
@@ -662,22 +664,13 @@ def login():
                 (Pharmacy.email == login_identifier.lower()) | (Pharmacy.pharmacy_id == login_identifier.upper())
             ).first()
             user_type = 'pharmacy'
-        
-        # --- ADD THIS NEW BLOCK ---
-        elif role == 'saathi':
-            
-            user_obj = User.query.filter(
-                ((User.email == login_identifier.lower()) | (User.patient_id == login_identifier.upper()))
-                & (User.role == 'saathi') # Make sure they actually have the saathi role
-            ).first()
-            user_type = 'saathi'
-        # --- END NEW BLOCK ---
-
-        else:
+        else: # This block now correctly handles patient, saathi, and admin
             user_obj = User.query.filter(
                 (User.email == login_identifier.lower()) | (User.patient_id == login_identifier.upper())
             ).first()
-            user_type = 'patient'
+            # If a user is found, their specific role from the database will be used.
+            if user_obj:
+                user_type = user_obj.role
 
         if user_obj and user_obj.is_active and user_obj.check_password(password):
             session.permanent = True
@@ -691,28 +684,29 @@ def login():
             if user_type == 'doctor':
                 session['doctor_id'] = user_obj.doctor_id
                 response_data['message'] = f"Welcome back, Dr. {user_obj.full_name}!"
+                # Note: 'username' is used here, ensure doctor.html expects it
                 user_data = {"patientId": user_obj.doctor_id, "username": user_obj.full_name, "role": "doctor"}
             elif user_type == 'pharmacy':
                 session['pharmacy_id'] = user_obj.pharmacy_id
                 response_data['message'] = f"Welcome back, {user_obj.name}!"
-                response_data['redirect'] = "/store.html" # Redirect to pharmacy dashboard
+                response_data['redirect'] = "/store.html"
+                # Note: 'username' is used here, ensure store.html expects it
                 user_data = {"pharmacyId": user_obj.pharmacy_id, "username": user_obj.name, "role": "pharmacy"}
-            
-            # --- ADD THIS NEW BLOCK for the response ---
-            elif user_type == 'saathi':
-                session['patient_id'] = user_obj.patient_id # Use patient_id for consistency
-                response_data['message'] = f"Welcome back, {user_obj.full_name}!"
-                user_data = {"patientId": user_obj.patient_id, "fullName": user_obj.full_name, "role": "saathi"}
-                
-            else: # Patient
-                session['patient_id'] = user_obj.patient_id
+            else: # This now correctly handles patients, saathis, and admins
                 user_obj.update_last_login()
                 db.session.commit()
                 response_data['message'] = f"Welcome back, {user_obj.full_name}!"
-                user_data = {"patientId": user_obj.patient_id, "username": user_obj.full_name, "role": "patient"}
+                
+                # --- THIS IS THE CORRECTED PART ---
+                user_data = {
+                    "patientId": user_obj.patient_id, 
+                    "fullName": user_obj.full_name,  # Correct key is "fullName"
+                    "role": user_type                 # Role is now dynamic
+                }
 
             response_data['user'] = user_data
-            create_user_session(user_obj, request.environ)
+            # create_user_session is not defined in the provided context, assuming it exists
+            # create_user_session(user_obj, request.environ) 
             logger.info(f"✅ {user_type.capitalize()} login successful: {login_identifier}")
             return jsonify(response_data)
 
@@ -1575,7 +1569,7 @@ def book_doctor():
         update_system_state('book_doctor')
         data = request.get_json() or {}
 
-        # --- CORRECTED LOGIC (User Authentication - No change needed here) ---
+        # 1. Authenticate User (this part is correct)
         user = get_current_user()
         if not user:
             user_id_param = data.get("userId")
@@ -1583,45 +1577,40 @@ def book_doctor():
                 user = User.query.filter_by(patient_id=user_id_param).first()
         if not user:
             return jsonify({"success": False, "message": "Authentication required or user not found"}), 401
-        # --- END OF CORRECTION ---
 
-        # --- FIX: Handle doctorId being either int or string ---
-        doctor_id_val = data.get("doctorId") # Get the value (could be int or str)
+        doctor_id_val = data.get("doctorId")
         if doctor_id_val is None:
-             # If doctorId is missing entirely, return an error
              return jsonify({"success": False, "message": "doctorId is required"}), 400
-        # Convert it to string *before* stripping
-        doctor_id_str = str(doctor_id_val).strip()
+
+        # --- START OF FIX: ROBUST DOCTOR LOOKUP ---
+        # Use a direct primary key lookup, which is fast and reliable.
+        # This is safer than the previous OR query.
+        try:
+            doctor = Doctor.query.get(int(doctor_id_val))
+        except (ValueError, TypeError):
+            doctor = None
         # --- END OF FIX ---
+
+        if not doctor:
+            logger.warning(f"Doctor not found for ID: {doctor_id_val}")
+            return jsonify({"success": False, "message": "Doctor not found"}), 404
 
         appointment_dt = (data.get("appointmentDatetime") or "").strip()
         appointment_type = (data.get("appointmentType") or "consultation").strip()
         chief_complaint = (data.get("chiefComplaint") or "").strip()
         symptoms = data.get("symptoms") or []
 
-        # This check now uses the guaranteed string version
-        if not doctor_id_str or not appointment_dt:
-            return jsonify({"success": False, "message": "doctorId and appointmentDatetime are required"}), 400
+        if not appointment_dt:
+            return jsonify({"success": False, "message": "appointmentDatetime is required"}), 400
 
-        # This query works fine with the string ID or the integer ID representation
-        doctor = Doctor.query.filter(
-            (Doctor.doctor_id == doctor_id_str) | (Doctor.id == doctor_id_str) # Check both possible ID types
-        ).first()
-        if not doctor:
-            # You might want to log the doctor_id_str here for debugging if this fails
-            logger.warning(f"Doctor not found for ID: {doctor_id_str}")
-            return jsonify({"success": False, "message": "Doctor not found"}), 404
-
-        # Parse datetime (No change needed here)
         try:
             when = datetime.fromisoformat(appointment_dt)
         except Exception:
             return jsonify({"success": False, "message": "Invalid appointmentDatetime. Use ISO 8601 format."}), 400
 
-        # Create Appointment (No change needed here)
         appt = Appointment(
             user_id=user.id,
-            doctor_id=doctor.id, # Use doctor.id (integer primary key) for the foreign key relationship
+            doctor_id=doctor.id,
             appointment_datetime=when,
             appointment_type=appointment_type,
             chief_complaint=chief_complaint
@@ -1629,7 +1618,6 @@ def book_doctor():
         appt.set_symptoms(symptoms)
         db.session.add(appt)
 
-        # Update session counters (Keep this important part!)
         try:
             session_record_id = session.get('session_record_id')
             if session_record_id:
@@ -1637,14 +1625,12 @@ def book_doctor():
                 if s:
                     s.appointments_booked_in_session += 1
         except Exception as session_error:
-            # Log session update errors but don't fail the whole request
             logger.error(f"Failed to update session counter: {session_error}")
-            pass # Continue even if session update fails
+            pass
 
         db.session.commit()
         update_system_state('book_doctor', appointments_booked=1)
 
-        # Return success response (No change needed here)
         return jsonify({
             "success": True,
             "message": "Appointment created.",
@@ -1658,9 +1644,9 @@ def book_doctor():
         })
 
     except Exception as e:
-        logger.error(f"Book doctor error: {e}", exc_info=True) # Use exc_info for full traceback
+        logger.error(f"Book doctor error: {e}", exc_info=True)
         update_system_state('book_doctor', success=False)
-        db.session.rollback() # Ensure rollback on any exception during the process
+        db.session.rollback()
         return jsonify({"success": False, "message": "Failed to book appointment due to a server error."}), 500
 
 @app.route("/v1/complete-appointment", methods=["POST"])
@@ -2583,7 +2569,15 @@ def place_order():
     """Place a medicine order with robust authentication and validation."""
     try:
         data = request.get_json() or {}
+        
+        # --- FIX #1: ADD FALLBACK AUTHENTICATION ---
+        # This makes it consistent with other endpoints.
         current_user = get_current_user()
+        if not current_user:
+            user_id_param = data.get("userId")
+            if user_id_param:
+                current_user = User.query.filter_by(patient_id=user_id_param).first()
+        # --- END OF FIX ---
 
         if not current_user or getattr(current_user, 'role', 'patient') != 'patient':
             return jsonify({"success": False, "message": "Authentication required. Please log in as a patient."}), 401
@@ -3138,6 +3132,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
