@@ -646,34 +646,40 @@ def login():
         data = request.get_json() or {}
         login_identifier = data.get("patientId", "").strip()
         password = data.get("password", "")
-        role = data.get("role", "patient").strip().lower()
+        role = data.get("role", "patient").strip().lower() # The role selected in the dropdown
 
         if not login_identifier or not password:
             return jsonify({"success": False, "message": "Identifier and password are required."}), 400
 
         user_obj = None
-        user_type = 'patient' # Default user type
-
         if role == 'doctor':
             user_obj = Doctor.query.filter(
                 (Doctor.email == login_identifier.lower()) | (Doctor.doctor_id == login_identifier.upper())
             ).first()
-            user_type = 'doctor'
         elif role == 'pharmacy':
             user_obj = Pharmacy.query.filter(
                 (Pharmacy.email == login_identifier.lower()) | (Pharmacy.pharmacy_id == login_identifier.upper())
             ).first()
-            user_type = 'pharmacy'
-        else: # This block now correctly handles patient, saathi, and admin
+        else: # Handles patient, saathi, and admin from the User table
             user_obj = User.query.filter(
                 (User.email == login_identifier.lower()) | (User.patient_id == login_identifier.upper())
             ).first()
-            # If a user is found, their specific role from the database will be used.
-            if user_obj:
-                user_type = user_obj.role
 
+        # --- THIS IS THE NEW SECURITY CHECK ---
+        # After finding a user, we MUST check if their actual role matches the role they claimed to be.
+        # For Doctors and Pharmacies, the query itself already filters by the correct table.
+        # For the User table, we need this explicit check.
+        if user_obj and role in ['patient', 'saathi', 'admin'] and user_obj.role != role:
+            logger.warning(f"Role mismatch attempt for user: '{login_identifier}'. Tried to log in as '{role}' but is actually a '{user_obj.role}'.")
+            # Return a generic error to avoid revealing which part (user/pass/role) was wrong.
+            return jsonify({"success": False, "message": "Invalid credentials or role selection."}), 401
+        # --- END OF SECURITY CHECK ---
+
+        # If the roles match (or for doctor/pharmacy), now we check the password.
         if user_obj and user_obj.is_active and user_obj.check_password(password):
+            # The rest of your successful login logic goes here, no changes needed.
             session.permanent = True
+            user_type = role # Use the verified role from the request
             session['user_id'] = user_obj.id
             session['role'] = user_type
             session['login_time'] = datetime.now().isoformat()
@@ -684,34 +690,29 @@ def login():
             if user_type == 'doctor':
                 session['doctor_id'] = user_obj.doctor_id
                 response_data['message'] = f"Welcome back, Dr. {user_obj.full_name}!"
-                # Note: 'username' is used here, ensure doctor.html expects it
                 user_data = {"patientId": user_obj.doctor_id, "username": user_obj.full_name, "role": "doctor"}
             elif user_type == 'pharmacy':
                 session['pharmacy_id'] = user_obj.pharmacy_id
                 response_data['message'] = f"Welcome back, {user_obj.name}!"
                 response_data['redirect'] = "/store.html"
-                # Note: 'username' is used here, ensure store.html expects it
                 user_data = {"pharmacyId": user_obj.pharmacy_id, "username": user_obj.name, "role": "pharmacy"}
-            else: # This now correctly handles patients, saathis, and admins
+            else: # patient, saathi, admin
                 user_obj.update_last_login()
                 db.session.commit()
                 response_data['message'] = f"Welcome back, {user_obj.full_name}!"
-                
-                # --- THIS IS THE CORRECTED PART ---
                 user_data = {
                     "patientId": user_obj.patient_id, 
-                    "fullName": user_obj.full_name,  # Correct key is "fullName"
-                    "role": user_type                 # Role is now dynamic
+                    "fullName": user_obj.full_name,
+                    "role": user_type
                 }
 
             response_data['user'] = user_data
-            # create_user_session is not defined in the provided context, assuming it exists
-            # create_user_session(user_obj, request.environ) 
             logger.info(f"✅ {user_type.capitalize()} login successful: {login_identifier}")
             return jsonify(response_data)
 
+        # This will now catch password mismatches AND role mismatches.
         logger.warning(f"⚠️ Failed login attempt for identifier: '{login_identifier}' as {role}")
-        return jsonify({"success": False, "message": "Invalid credentials or account inactive."}), 401
+        return jsonify({"success": False, "message": "Invalid credentials or role selection."}), 401
 
     except Exception as e:
         logger.error(f"❌ Login error: {e}", exc_info=True)
@@ -3134,6 +3135,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
