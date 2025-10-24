@@ -1232,7 +1232,6 @@ def _get_or_create_symptom_context(user_id: str, initial_symptom: Optional[str] 
 
 # In chatbot.py
 
-
 @app.route("/v1/predict", methods=["POST"])
 def predict():
     """
@@ -1269,27 +1268,46 @@ def predict():
         nlu_understanding = nlu_processor.understand_user_intent(user_message, sehat_sahara_mode=True)
         primary_intent = nlu_understanding.get('primary_intent', 'general_inquiry')
 
-        # --- START OF NEW FIX BLOCK ---
-        # This block is added to correctly manage the conversational state. The rest of the function is your original code.
+        # Get current task from conversation memory
+        if hasattr(initialize_ai_components, '_conversation_memory'):
+            current_task_from_memory = initialize_ai_components._conversation_memory.get_current_task(current_user.patient_id)
+            task_in_progress = current_task_from_memory.get('task') if current_task_from_memory else None
 
+        # --- FIX #1: FLEXIBLE STATE MANAGEMENT ---
+        # If the user has a new, unrelated intent, cancel the old task.
+        # This prevents the booking/symptom flow from "hijacking" the conversation.
         related_booking_intents = ['appointment_booking', 'SELECT_SPECIALTY', 'SELECT_DOCTOR', 'SELECT_DATE', 'SELECT_TIME', 'SELECT_MODE']
         related_symptom_intents = ['symptom_triage', 'CONTINUE_SYMPTOM_CHECK']
-        
-        # This logic checks if the user's intent is to start or restart the booking flow.
-        if primary_intent == 'appointment_booking':
-            logger.info(f"User {current_user.patient_id} wants to book. Resetting the appointment flow.")
-            if task_in_progress:
+
+        # Special handling for symptom triage context
+        if task_in_progress == 'symptom_triage' and primary_intent == 'out_of_scope':
+            # Check if this might be a symptom follow-up that was misclassified
+            symptom_followup_indicators = [
+                'days', 'hours', 'weeks', 'since', 'ago', 'started', 'began',
+                'pain', 'hurt', 'ache', 'feel', 'feeling', 'still', 'now', 'when',
+                'morning', 'night', 'yesterday', 'today', 'severe', 'mild', 'moderate'
+            ]
+            message_words = user_message.lower().split()
+            is_likely_symptom_followup = any(indicator in message_words for indicator in symptom_followup_indicators)
+
+            if is_likely_symptom_followup:
+                logger.info(f"Correcting misclassified symptom follow-up for user {current_user.patient_id}")
+                primary_intent = 'symptom_triage'
+
+        is_unrelated_intent = (
+            task_in_progress and
+            primary_intent not in related_booking_intents and
+            button_action not in related_booking_intents and
+            primary_intent not in related_symptom_intents and
+            button_action not in related_symptom_intents and
+            primary_intent != task_in_progress
+        )
+        if is_unrelated_intent:
+            logger.warning(f"User {current_user.patient_id} switched intent from '{task_in_progress}' to '{primary_intent}'. Completing old task.")
+            if hasattr(initialize_ai_components, '_conversation_memory'):
                 initialize_ai_components._conversation_memory.complete_task(current_user.patient_id)
-            # This is the key change that forces the booking flow to start from scratch.
-            task_in_progress = None 
-        
-        # This logic handles the user switching to a completely different topic.
-        elif task_in_progress and primary_intent not in related_booking_intents and button_action not in related_booking_intents and primary_intent not in related_symptom_intents and button_action not in related_symptom_intents and primary_intent != task_in_progress:
-            logger.warning(f"User {current_user.patient_id} switched intent from '{task_in_progress}' to '{primary_intent}'. Stopping old task.")
-            initialize_ai_components._conversation_memory.complete_task(current_user.patient_id)
-            task_in_progress = None
-            
-        # --- END OF NEW FIX BLOCK ---
+            task_in_progress = None # Reset task_in_progress to allow new task to start
+        # --- END OF FIX #1 ---
 
         ai_message_override = user_message
 
@@ -1371,6 +1389,8 @@ def predict():
         elif task_in_progress == 'symptom_triage':
             symptom_context = _get_or_create_symptom_context(current_user.patient_id)
             
+            # --- FIX 1: Always treat follow-up messages as part of the symptom check ---
+            # This prevents a misclassification from ending the conversation.
             primary_intent = 'symptom_triage' 
             
             symptom_context['symptoms_reported'].append(user_message)
@@ -1385,6 +1405,7 @@ def predict():
                     "DO NOT repeat a question that has already been answered in the history."
                 )
                 
+                # --- FIX 2: Correctly increment the turn counter ---
                 symptom_context['turn_count'] = turn_count + 1 
                 
                 if hasattr(initialize_ai_components, '_conversation_memory'):
@@ -1405,7 +1426,7 @@ def predict():
                 if hasattr(initialize_ai_components, '_conversation_memory'):
                     initialize_ai_components._conversation_memory.complete_task(current_user.patient_id)
 
-        else: # This block is for starting a NEW task
+        else:
             if primary_intent == 'appointment_booking':
                 booking_context = _get_or_create_booking_context(current_user.patient_id)
                 booking_context.clear()
@@ -1419,15 +1440,16 @@ def predict():
             elif primary_intent == 'symptom_triage':
                 symptom_context = _get_or_create_symptom_context(current_user.patient_id, initial_symptom=user_message)
                 symptom_context['turn_count'] = 1
-                symptom_context.clear()
-                symptom_context['symptoms_reported'] = [user_message]
+                symptom_context.clear() # Clear any old data
+                symptom_context['symptoms_reported'] = [user_message] # Add the first symptom
                 ai_message_override = f"CONTEXT: Start of a symptom check. User said '{user_message}'. Acknowledge their symptom and ask your first clarifying question (e.g., 'For how long?' or 'Is it a sharp or dull pain?')."
                 if hasattr(initialize_ai_components, '_conversation_memory'):
                     initialize_ai_components._conversation_memory.set_current_task(current_user.patient_id, 'symptom_triage', symptom_context)
             
+            # --- NEW LOGIC FOR GUIDANCE BUTTONS ---
             elif primary_intent in ['medicine_scan', 'how_to_medicine_scan']:
                 if hasattr(initialize_ai_components, '_conversation_memory'):
-                    initialize_ai_components._conversation_memory.complete_task(current_user.patient_id)
+                    initialize_ai_components._conversation_memory.complete_task(current_user.patient_id) # Clear any previous task
                 ai_message_override = (
                     "CONTEXT: The user wants to scan a medicine. First, provide a brief, friendly guide on how to use the scanner (e.g., 'I can help with that! Just point your camera at the medicine...'). "
                     "Then, your action MUST be 'SHOW_GUIDANCE' and you MUST include this exact button in the interactive_buttons array: "
@@ -1436,13 +1458,14 @@ def predict():
 
             elif primary_intent in ['prescription_upload', 'how_to_prescription_upload', 'prescription_inquiry']:
                 if hasattr(initialize_ai_components, '_conversation_memory'):
-                    initialize_ai_components._conversation_memory.complete_task(current_user.patient_id)
+                    initialize_ai_components._conversation_memory.complete_task(current_user.patient_id) # Clear any previous task
                 ai_message_override = (
                     "CONTEXT: The user wants to upload a prescription. First, provide a brief, friendly guide on how to upload (e.g., 'Okay, let\\'s upload your prescription. Make sure the photo is clear...'). "
                     "Then, your action MUST be 'SHOW_GUIDANCE' and you MUST include this exact button in the interactive_buttons array: "
                     '[{"text": "📤 Upload Prescription", "action": "UPLOAD_PRESCRIPTION", "parameters": {}, "style": "primary"}]'
                 )
         
+        # --- AI RESPONSE GENERATION ---
         if hasattr(initialize_ai_components, '_conversation_memory'):
             history = initialize_ai_components._conversation_memory.get_conversation_context(current_user.patient_id, turns=8)
         else:
@@ -1462,6 +1485,8 @@ def predict():
                     
                     action_payload = json.loads(cleaned_response)
 
+                    # In the /v1/predict function
+
                     if action_payload.get("action") == "FINALIZE_BOOKING":
                         booking_context = _get_or_create_booking_context(current_user.patient_id)
                         doc_id = booking_context.get('doctor_id')
@@ -1470,16 +1495,18 @@ def predict():
                         doctor = Doctor.query.filter_by(doctor_id=doc_id).first()
 
                         if all([doctor, appt_date, appt_time_str]):
+                            # --- FIX: Instead of saving, package the data for the frontend ---
                             appt_datetime = datetime.fromisoformat(f"{appt_date}T{appt_time_str}:00")
                             
                             action_payload['response'] = f"Great! I'm confirming your appointment with Dr. {doctor.full_name} for {appt_datetime.strftime('%A, %b %d at %I:%M %p')}. One moment..."
-                            action_payload['action'] = 'EXECUTE_BOOKING'
+                            action_payload['action'] = 'EXECUTE_BOOKING' # New action for the frontend
                             action_payload['parameters'] = {
-                                'doctorId': doctor.id,
+                                'doctorId': doctor.id, # Use the integer ID for the reliable endpoint
                                 'appointmentDatetime': appt_datetime.isoformat(),
                                 'appointmentType': booking_context.get('mode', 'Video Call'),
                                 'chiefComplaint': f"Consultation for {booking_context.get('specialty')}"
                             }
+                            # --- FIX: Explicitly clear any buttons from the AI's response ---
                             action_payload['interactive_buttons'] = []
 
                             if hasattr(initialize_ai_components, '_conversation_memory'):
@@ -1508,6 +1535,7 @@ def predict():
             logger.warning(f"AI failed or unavailable. Using local fallback for intent: {primary_intent}")
             action_payload = response_generator.generate_response(user_message=user_message, nlu_result=nlu_understanding, user_context={'user_id': current_user.patient_id}, conversation_history=history)
 
+        # --- FINAL PROCESSING & SAVING ---
         action_payload_str = json.dumps(action_payload, ensure_ascii=False)
         turn_record = ConversationTurn(user_id=current_user.id, user_message=user_message, bot_response=action_payload_str, detected_intent=primary_intent, action_triggered=action_payload.get('action'))
         db.session.add(turn_record)
@@ -1517,6 +1545,7 @@ def predict():
             if hasattr(initialize_ai_components, '_conversation_memory'):
                 initialize_ai_components._conversation_memory.update_button_visibility(current_user.patient_id, 'medicine_recommendation')
 
+        # Ensure conversation memory is saved after each interaction
         try:
             if hasattr(initialize_ai_components, '_conversation_memory'):
                 initialize_ai_components._conversation_memory.save_to_file(os.path.join(models_path, 'conversation_memory.json'))
@@ -3105,6 +3134,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
