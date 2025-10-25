@@ -15,9 +15,6 @@ import re
 from functools import wraps
 import uuid
 import base64
-# *** ADD THIS IMPORT ***
-from flask_socketio import SocketIO, emit, join_room, leave_room
-
 sos_events ={}
 # For simplicity, a global dictionary is used here.
 
@@ -127,12 +124,6 @@ CORS(app, supports_credentials=True, resources={
         "expose_headers": ["Content-Type", "Authorization"]
     }
 })
-
-# *** ADD SOCKETIO INITIALIZATION ***
-# Configure based on your production server (e.g., Render uses Gunicorn)
-# Use 'threading' for local dev, adjust for production if needed
-# Add async_mode='gevent' or 'eventlet' if using those workers with Gunicorn
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 
 # Enhanced security configuration
@@ -359,63 +350,11 @@ system_state = {
     'fallback_responses': 0
 }
 
-
+# WebRTC signaling messages storage (in-memory for demo)
+webrtc_messages = {}
 
 # Thread lock for system state updates
 state_lock = threading.Lock()
-# *** ADD THIS NEW SOCKETIO HANDLER ***
-@socketio.on('signal')
-def handle_signal(data):
-    """Relay signaling messages between peers in the same room."""
-    appointment_id = data.get('appointmentId')
-    message_type = data.get('type')
-    message_data = data.get('data')
-    sender_sid = request.sid # SocketIO session ID of the sender
-
-    if not appointment_id or not message_type or message_data is None:
-        logger.warning(f"Invalid signal received: {data}")
-        return # Ignore invalid messages
-
-    room = f"call_{appointment_id}"
-    logger.info(f"Relaying '{message_type}' from {sender_sid} to room {room}")
-
-    # Emit the message to everyone else in the room
-    emit('signal', data, room=room, include_self=False)
-
-@socketio.on('join_call')
-def on_join(data):
-    """Handle a user joining a call room."""
-    appointment_id = data.get('appointmentId')
-    user_id = data.get('userId') # Could be patientId or doctorId
-    if not appointment_id or not user_id:
-        logger.warning(f"Invalid join_call request: {data}")
-        return
-
-    room = f"call_{appointment_id}"
-    join_room(room)
-    logger.info(f"User {user_id} ({request.sid}) joined room {room}")
-    # Notify others in the room (optional)
-    emit('user_joined', {'userId': user_id}, room=room, include_self=False)
-
-@socketio.on('leave_call')
-def on_leave(data):
-    """Handle a user leaving a call room."""
-    appointment_id = data.get('appointmentId')
-    user_id = data.get('userId')
-    if not appointment_id or not user_id:
-        logger.warning(f"Invalid leave_call request: {data}")
-        return
-
-    room = f"call_{appointment_id}"
-    leave_room(room)
-    logger.info(f"User {user_id} ({request.sid}) left room {room}")
-    # Notify others in the room (optional)
-    emit('user_left', {'userId': user_id}, room=room, include_self=False)
-
-@socketio.on('disconnect')
-def test_disconnect():
-    logger.info(f"Client disconnected: {request.sid}")
-    # You might want to automatically leave rooms here if needed
 
 # Initialize enhanced AI components with comprehensive error handling
 def initialize_ai_components():
@@ -3060,11 +2999,6 @@ def get_doctor_profile():
     """Get doctor profile information"""
     try:
         # In chatbot1.py, inside the get_doctor_profile function, around line 1948
-        # --- START: Add Logging ---
-        logger.info(f"--- Doctor Profile Request ---")
-        logger.info(f"Request Headers: {dict(request.headers)}") # Log all headers
-        logger.info(f"Session before access: {dict(session)}") # Log session content
-        # --- END: Add Logging ---
         doctor_id_str = session.get('doctor_id')
         if not doctor_id_str:
             return jsonify({"error": "Not authenticated as doctor"}), 401
@@ -3095,7 +3029,49 @@ def get_doctor_profile():
 
 
 # WebRTC signaling endpoints
+@app.route("/v1/webrtc/<message_type>", methods=["POST"])
+def webrtc_signaling(message_type):
+    """Handle WebRTC signaling messages"""
+    try:
+        data = request.get_json() or {}
+        appointment_id = data.get("appointmentId")
+        message_data = data.get("data")
 
+        if not appointment_id or message_data is None:
+            return jsonify({"error": "appointmentId and data required"}), 400
+
+        if appointment_id not in webrtc_messages:
+            webrtc_messages[appointment_id] = []
+
+        webrtc_messages[appointment_id].append({
+            "type": message_type,
+            "data": message_data,
+            "timestamp": datetime.now().isoformat()
+        })
+
+        logger.info(f"WebRTC message stored: {message_type} for appointment {appointment_id}")
+        return jsonify({"success": True})
+
+    except Exception as e:
+        logger.error(f"WebRTC signaling error: {e}")
+        return jsonify({"error": "Failed to process signaling message"}), 500
+
+@app.route("/v1/webrtc/poll", methods=["GET"])
+def webrtc_poll():
+    """Poll for WebRTC signaling messages"""
+    try:
+        appointment_id = request.args.get("appointmentId")
+        if not appointment_id:
+            return jsonify([])
+
+        messages = webrtc_messages.get(appointment_id, [])
+        # Return messages and clear them after sending
+        webrtc_messages[appointment_id] = []
+        return jsonify(messages)
+
+    except Exception as e:
+        logger.error(f"WebRTC poll error: {e}")
+        return jsonify({"error": "Failed to poll messages"}), 500
 
 
 # Scheduled tasks and cleanup
@@ -3270,18 +3246,7 @@ if __name__ == "__main__":
 
     # Start the Flask application
 
-    # Use socketio.run instead of app.run
-    logger.info(f"Starting SocketIO server on port {os.environ.get('PORT', 5000)}")
-    
-
-
-
-
-
-
-
-
-
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
 
 
 
