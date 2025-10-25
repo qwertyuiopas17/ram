@@ -32,7 +32,9 @@ APScheduler
 py-vapid
 Flask-SocketIO
 gevent
-gevent-websocket
+
+gevent-websocket==0.10.1
+
 
 
 
