@@ -3060,6 +3060,11 @@ def get_doctor_profile():
     """Get doctor profile information"""
     try:
         # In chatbot1.py, inside the get_doctor_profile function, around line 1948
+        # --- START: Add Logging ---
+        logger.info(f"--- Doctor Profile Request ---")
+        logger.info(f"Request Headers: {dict(request.headers)}") # Log all headers
+        logger.info(f"Session before access: {dict(session)}") # Log session content
+        # --- END: Add Logging ---
         doctor_id_str = session.get('doctor_id')
         if not doctor_id_str:
             return jsonify({"error": "Not authenticated as doctor"}), 401
@@ -3268,6 +3273,7 @@ if __name__ == "__main__":
     # Use socketio.run instead of app.run
     logger.info(f"Starting SocketIO server on port {os.environ.get('PORT', 5000)}")
     
+
 
 
 
