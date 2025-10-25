@@ -188,78 +188,149 @@ if not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY:
 scheduler = BackgroundScheduler(daemon=True)
 
 # Replace your entire function with this one
+# In chatbot.py
+
+# Replace your entire function with this one
 def check_and_send_reminders():
-    """The background job that checks for due reminders and sends push notifications."""
+    """The background job that checks for due reminders, sends push notifications, and reschedules."""
+    # --- ADDED: Ensure app context for database operations ---
     with app.app_context():
+        # --- ADDED: Load memory at the start of the job ---
+        memory_loaded = conversation_memory.load_from_file(os.path.join(models_path, 'conversation_memory.json'))
+        if not memory_loaded:
+             logger.error("Failed to load conversation memory in reminder job. Aborting check.")
+             return # Cannot proceed without memory
+
         try:
-            # --- FIX #1: Use timezone-aware datetime ---
-            # Load the latest reminders from the shared file
-            conversation_memory.load_from_file(os.path.join(models_path, 'conversation_memory.json'))
             now_utc = datetime.now(timezone.utc)
-            
-            for profile in conversation_memory.user_profiles.values():
-                for reminder in profile.medicine_reminders:
-                    if reminder.get('next_alert_utc') and not reminder.get('alert_sent'):
-                        
-                        # --- FIX #2: Correctly parse the aware timestamp ---
-                        alert_time_utc = datetime.fromisoformat(reminder['next_alert_utc'])
-                        
+            reminders_updated = False # Flag to check if we need to save
+
+            # Iterate through a copy of profiles in case memory changes during iteration (less likely here but safer)
+            for user_id, profile in list(conversation_memory.user_profiles.items()):
+                # Iterate through a copy of reminders for safe modification
+                for reminder in list(profile.medicine_reminders):
+                    # Check if reminder is enabled and has a next alert time
+                    if reminder.get('reminder_enabled', True) and reminder.get('next_alert_utc') and not reminder.get('alert_sent'):
+                        try:
+                            alert_time_utc = datetime.fromisoformat(reminder['next_alert_utc'])
+                        except ValueError:
+                             logger.error(f"Invalid ISO format for next_alert_utc for user {user_id}, reminder {reminder.get('medicine_name')}. Skipping.")
+                             continue # Skip this reminder
+
+                        # Check if the alert time is now or in the past
                         if alert_time_utc <= now_utc:
-                            logger.info(f"Alert due for user {profile.user_id} for medicine {reminder['medicine_name']}")
-                            
+                            logger.info(f"Alert due for user {profile.user_id} for medicine {reminder['medicine_name']} at {alert_time_utc}")
+
                             user_db = User.query.filter_by(patient_id=profile.user_id).first()
                             if not user_db:
-                                continue
+                                logger.warning(f"User DB record not found for patient_id {profile.user_id}. Cannot send reminder.")
+                                continue # Skip if user doesn't exist in DB
 
                             subscriptions = PushSubscription.query.filter_by(user_id=user_db.id).all()
                             if not subscriptions:
-                                logger.warning(f"No push subscriptions found for user {profile.user_id}")
-                                reminder['alert_sent'] = True
-                                # --- ADD THIS LINE ---
-                                conversation_memory.save_to_file(os.path.join(models_path, 'conversation_memory.json'))
+                                logger.warning(f"No push subscriptions found for user {profile.user_id}. Marking alert as sent.")
+                                # --- START: Reschedule even if no subscription ---
+                                user_timezone = reminder.get("timezone", "UTC")
+                                times_list = reminder.get("times", [])
+                                if times_list:
+                                    reminder['next_alert_utc'] = conversation_memory._calculate_next_utc_timestamp(times_list, user_timezone)
+                                    reminder['alert_sent'] = False # Reset flag for the *next* alert
+                                    logger.info(f"Rescheduled reminder (no subs) for {reminder['medicine_name']} to {reminder['next_alert_utc']}")
+                                    reminders_updated = True
+                                else:
+                                    reminder['alert_sent'] = True # Cannot reschedule without times
+                                    reminders_updated = True
+                                # --- END: Reschedule even if no subscription ---
                                 continue
 
                             push_payload = json.dumps({
                                 "title": "💊 Sehat Sahara Reminder",
                                 "options": {
-                                    "body": f"It's time to take: {reminder['medicine_name']} ({reminder['dosage']})",
-                                    "icon": "https://ibb.co/SDRZX99R",
+                                    "body": f"It's time to take: {reminder['medicine_name']} ({reminder.get('dosage', 'N/A')})",
+                                    # --- ADDED: More specific icon ---
+                                    "icon": "https://i.ibb.co/bmdxHqN/pills.png",
                                     "actions": [
                                         {"action": "mark-taken", "title": "Mark as Taken"},
                                         {"action": "close", "title": "Close"}
                                     ],
                                     "data": {
+                                        # --- ADDED: Send necessary data to frontend ---
+                                        "action": "mark-taken",
                                         "medicineName": reminder['medicine_name'],
                                         "userId": profile.user_id
                                     },
-                                    "tag": f"medicine-reminder-{reminder['medicine_name']}",
+                                    # --- ADDED: Tag to allow replacing pending notifications ---
+                                    "tag": f"med-reminder-{profile.user_id}-{reminder['medicine_name'].replace(' ','-')}"
                                 }
                             })
 
+                            sent_successfully = False
                             for sub in subscriptions:
                                 try:
                                     webpush(
                                         subscription_info=json.loads(sub.subscription_info),
                                         data=push_payload,
                                         vapid_private_key=VAPID_PRIVATE_KEY,
-                                        vapid_claims={"sub": "mailto:" + VAPID_CLAIM_EMAIL} # Corrected mailto usage
+                                        vapid_claims={"sub": "mailto:" + VAPID_CLAIM_EMAIL}
                                     )
                                     logger.info(f"Push notification sent successfully to a device for user {profile.user_id}")
+                                    sent_successfully = True
                                 except WebPushException as ex:
                                     logger.error(f"Failed to send push notification: {ex}")
+                                    # Handle expired/invalid subscriptions
                                     if ex.response and ex.response.status_code in [404, 410]:
+                                        logger.info(f"Deleting expired subscription for user {profile.user_id}")
                                         db.session.delete(sub)
+                                        # Commit immediately to remove invalid sub
                                         db.session.commit()
-                                        logger.info(f"Deleted expired subscription for user {profile.user_id}")
-                            
-                            reminder['alert_sent'] = True
-                            conversation_memory.save_to_file(os.path.join(models_path, 'conversation_memory.json'))
-                
-                # After checking all reminders for a user, recalculate the next alert
-                #conversation_memory.recalculate_all_next_alerts(profile.user_id)
+                                except Exception as push_err:
+                                     logger.error(f"Unexpected error sending push: {push_err}")
+
+
+                            # --- START: Modified Rescheduling Logic ---
+                            if sent_successfully:
+                                logger.info(f"Successfully sent alert for {reminder['medicine_name']} to user {profile.user_id}. Now rescheduling.")
+                            else:
+                                logger.warning(f"Failed to send alert for {reminder['medicine_name']} to user {profile.user_id} (no valid subscriptions?). Still rescheduling.")
+
+                            # Calculate the next alert time REGARDLESS of send success
+                            user_timezone = reminder.get("timezone", "UTC")
+                            times_list = reminder.get("times", [])
+
+                            # Optional: Add duration check here later if needed
+                            start_date_str = reminder.get('start_date')
+                            duration_days = reminder.get('duration_days')
+                            if start_date_str and duration_days:
+                                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                                end_date = start_date + timedelta(days=duration_days)
+                                if datetime.now().date() >= end_date:
+                                    logger.info(f"Reminder duration ended for {reminder['medicine_name']}. Disabling.")
+                                    reminder['reminder_enabled'] = False
+                                    reminders_updated = True
+                                    continue # Skip rescheduling
+
+                            if times_list:
+                                next_alert_iso = conversation_memory._calculate_next_utc_timestamp(times_list, user_timezone)
+                                reminder['next_alert_utc'] = next_alert_iso
+                                reminder['alert_sent'] = False # Reset flag for the *next* schedule
+                                logger.info(f"Rescheduled reminder for {reminder['medicine_name']} to {next_alert_iso}")
+                                reminders_updated = True
+                            else:
+                                # Cannot reschedule without a time list, mark as sent to prevent re-sending
+                                reminder['alert_sent'] = True
+                                logger.warning(f"Reminder for {reminder['medicine_name']} has no times_list, cannot reschedule. Marked as sent.")
+                                reminders_updated = True
+                            # --- END: Modified Rescheduling Logic ---
+
+            # --- Save memory ONCE after checking all users/reminders ---
+            if reminders_updated:
+                logger.info("Saving updated reminder schedules to memory file.")
+                conversation_memory.save_to_file(os.path.join(models_path, 'conversation_memory.json'))
 
         except Exception as e:
             logger.error(f"Error in background reminder job: {e}", exc_info=True)
+            # Rollback potential DB changes if error occurred during subscription deletion
+            db.session.rollback()
 
 
 # Start the background job
@@ -3176,6 +3247,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
