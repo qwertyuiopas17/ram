@@ -30,6 +30,10 @@ bcrypt
 pywebpush
 APScheduler
 py-vapid
+Flask-SocketIO
+gevent
+gevent-websocket
+
 
 
 
