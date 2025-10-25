@@ -3267,7 +3267,7 @@ if __name__ == "__main__":
 
     # Use socketio.run instead of app.run
     logger.info(f"Starting SocketIO server on port {os.environ.get('PORT', 5000)}")
-    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+    
 
 
 
