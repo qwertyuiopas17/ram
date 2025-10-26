@@ -1677,37 +1677,44 @@ def predict():
 
 
         elif task_in_progress == 'symptom_triage':
-            final_primary_intent_for_context = 'symptom_triage' # Ensure context matches task
+            final_primary_intent_for_context = 'symptom_triage'
             symptom_context = _get_or_create_symptom_context(current_user.patient_id)
 
-            # Add user's message to reported symptoms unless it's just a button click
             if not button_action:
-                 # Avoid adding very short/generic answers if they don't seem like symptoms
+                 # Only add meaningful answers to history
                  if len(user_message.split()) > 1 or any(kw in user_message.lower() for kw in ['pain', 'ache', 'fever', 'cough', 'yes', 'no', 'haan', 'nahi']):
                       symptom_context.setdefault('symptoms_reported', []).append(user_message)
 
             turn_count = symptom_context.get('turn_count', 0)
-            symptoms_history = "; ".join(symptom_context.get('symptoms_reported', []))
+            symptoms_history_list = symptom_context.get('symptoms_reported', [])
+            symptoms_history = "; ".join(symptoms_history_list)
+            # --- NEW: Get initial symptom ---
+            initial_symptom = symptoms_history_list[0] if symptoms_history_list else "the symptom mentioned"
+            # --- END NEW ---
 
-            if turn_count < 3: # Ask up to 3 clarifying questions
+            if turn_count < 3:
+                # --- MODIFIED CONTEXT STRING ---
                 ai_message_override = (
-                    f"CONTEXT: Symptom check (Turn {turn_count+1}/3). History: '{symptoms_history}'. Latest: '{user_message}'. "
+                    f"CONTEXT: Symptom check (Turn {turn_count+1}/3) regarding '{initial_symptom}'. History: '{symptoms_history}'. Latest: '{user_message}'. " # Added initial symptom
                     "Acknowledge latest input and ask the *next* logical clarifying question (e.g., duration, severity, type of pain, other symptoms). "
                     "DO NOT repeat questions already answered in history. Action should be CONTINUE_CONVERSATION."
                 )
+                # --- END MODIFIED ---
                 symptom_context['turn_count'] = turn_count + 1
                 if conversation_memory:
                     conversation_memory.set_current_task(current_user.patient_id, 'symptom_triage', symptom_context)
-            else: # Provide remedy and buttons
-                ai_message_override = (
-                    f"CONTEXT: Symptom check complete. History: '{symptoms_history}'. "
+            else:
+                 # --- MODIFIED CONTEXT STRING ---
+                 ai_message_override = (
+                    f"CONTEXT: Symptom check complete regarding '{initial_symptom}'. History: '{symptoms_history}'. " # Added initial symptom
                     "Provide a simple, safe home remedy (e.g., rest, fluids, warm compress). "
                     "Then include the MANDATORY disclaimer: 'This is not medical advice. For a proper diagnosis, please consult a doctor.' "
                     "Finally, guide them towards app features using these EXACT buttons: "
                     '[{"text": "📷 Scan Medicine", "action": "START_MEDICINE_SCANNER", "style": "primary"}, {"text": "📤 Upload Prescription", "action": "UPLOAD_PRESCRIPTION", "style": "secondary"}]. '
                     "Your action MUST be 'SHOW_MEDICINE_REMEDY'."
                 )
-                if conversation_memory:
+                 # --- END MODIFIED ---
+                 if conversation_memory:
                     conversation_memory.complete_task(current_user.patient_id)
 
 

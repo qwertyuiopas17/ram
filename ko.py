@@ -244,8 +244,9 @@ class ProgressiveResponseGenerator:
                         "Let me guide you to the medicine scanner.",
                         "Use the scanner to identify your medicine."
                     ],
-                    'action': 'START_MEDICINE_SCANNER',
-                    'parameters': {}
+                    'action': 'SHOW_GUIDANCE',
+                    'parameters': {},
+                    'interactive_buttons': [{"text": "📷 Open Scanner", "action": "START_MEDICINE_SCANNER", "parameters": {}, "style": "primary"}]
                 },
                 'hi': {
                     'responses': [
@@ -253,8 +254,10 @@ class ProgressiveResponseGenerator:
                         "Medicine scanner tak le chalti hoon.",
                         "Medicine identify karne ke liye scanner use kariye."
                     ],
-                    'action': 'START_MEDICINE_SCANNER',
-                    'parameters': {}
+                    'action': 'SHOW_GUIDANCE',
+                    'parameters': {},
+                    'interactive_buttons': [{"text": "📷 Open Scanner", "action": "START_MEDICINE_SCANNER", "parameters": {}, "style": "primary"}]
+
                 },
                 'pa': {
                     'responses': [
@@ -262,8 +265,19 @@ class ProgressiveResponseGenerator:
                         "Medicine scanner tak le chalti haan.",
                         "Medicine identify karan layi scanner use karo."
                     ],
-                    'action': 'START_MEDICINE_SCANNER',
-                    'parameters': {}
+                    'action': 'SHOW_GUIDANCE',
+                    'parameters': {},
+                    'interactive_buttons': [{"text": "📷 Open Scanner", "action": "START_MEDICINE_SCANNER", "parameters": {}, "style": "primary"}]
+                },
+                'bn': { # Add Bengali fallback too
+                    'responses': [
+                        "ঠিক আছে, আমি আপনার ওষুধ স্ক্যান করতে সাহায্য করতে পারি। অনুগ্রহ করে আপনার ক্যামেরা প্যাকেজিংয়ের দিকে নির্দেশ করুন।",
+                        "আসুন আপনার ওষুধ স্ক্যান করি। ওষুধটি ক্যামেরার সামনে স্পষ্টভাবে রাখুন।",
+                        "আপনার ওষুধ শনাক্ত করতে স্ক্যানার ব্যবহার করুন। নিশ্চিত করুন আলো যথেষ্ট।"
+                    ],
+                    'action': 'SHOW_GUIDANCE',
+                    'parameters': {},
+                    'interactive_buttons': [{"text": "📷 স্ক্যানার খুলুন", "action": "START_MEDICINE_SCANNER", "parameters": {}, "style": "primary"}]
                 }
             },
             'emergency_assistance': {

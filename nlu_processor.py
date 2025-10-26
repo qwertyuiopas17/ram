@@ -1303,6 +1303,8 @@ Consider:
                 break
         
         return context
+    # In nlu_processor.py
+
     def _detect_language(self, message: str) -> str:
         """Improved language detection with better accuracy for mixed content."""
         if not message or not message.strip():
@@ -1317,96 +1319,76 @@ Consider:
         if re.search(r'[\u0A00-\u0A7F]', message): return 'pa'  # Gurmukhi
         if re.search(r'[\u0980-\u09FF]', message): return 'bn'  # Bengali Script
 
-        # 2. Strong Language Markers (Especially useful for short messages)
-        # More extensive lists focusing on unique/common words
+        # 2. Strong Language Markers
         markers = {
-            'hi': ['hai', 'hain', 'kya', 'kaise', 'kab', 'kahan', 'kyon', 'kyu', 'mera', 'meri', 'mujhe', 'mujhko', 'aap', 'aapko', 'tum', 'tumko', 'kar', 'karo', 'karna', 'nahi', 'liye', 'se', 'ko', 'mein', 'par', 'aur', 'bhi', 'tha', 'thi', 'the', 'hoon', 'ho', 'hoga', 'hogi'],
-            'pa': ['hai', 'han', 'ki', 'kive', 'kado', 'kithe', 'kyon', 'kyu', 'mera', 'meri', 'mainu', 'tusi', 'tuhada', 'tera', 'teri', 'kar', 'karo', 'karna', 'nahi', 'nahin', 'lai', 'ton', 'nu', 'vich', 'te', 'vi', 'si', 'san', 'haan', 'ho', 'hovega', 'hovegi'],
-            'bn': ['chai', 'korte', 'korbo', 'kori', 'amar', 'tumi', 'apni', 'ache', 'nei', 'ki', 'kothay', 'kobe', 'keno', 'bhalo', 'na', 'er', 'te', 'o', 'chilo', 'hobe'],
-            'en': ['is', 'are', 'am', 'was', 'were', 'the', 'a', 'an', 'my', 'your', 'his', 'her', 'its', 'our', 'their', 'you', 'i', 'me', 'he', 'she', 'it', 'we', 'they', 'what', 'where', 'when', 'why', 'how', 'do', 'does', 'did', 'have', 'has', 'had', 'can', 'could', 'will', 'would', 'should', 'not', 'and', 'but', 'or', 'to', 'in', 'on', 'at', 'for', 'with', 'from', 'about', 'please', 'thank', 'hello', 'goodbye', 'yes', 'no', 'ok']
+            'hi': ['hai', 'hain', 'kya', 'kaise', 'kab', 'kahan', 'kyon', 'kyu', 'mera', 'meri', 'mujhe', 'mujhko', 'aap', 'aapko', 'tum', 'tumko', 'kar', 'karo', 'karna', 'nahi', 'liye', 'se', 'ko', 'mein', 'par', 'aur', 'bhi', 'tha', 'thi', 'the', 'hoon', 'ho', 'hoga', 'hogi', 'raha', 'rahi', 'rahe', 'badh', 'kam', 'din', 'kal', 'aaj'], # <-- Added common words
+            'pa': ['hai', 'han', 'ki', 'kive', 'kado', 'kithe', 'kyon', 'kyu', 'mera', 'meri', 'mainu', 'tusi', 'tuhada', 'tera', 'teri', 'kar', 'karo', 'karna', 'nahi', 'nahin', 'lai', 'ton', 'nu', 'vich', 'te', 'vi', 'si', 'san', 'haan', 'ho', 'hovega', 'hovegi', 'reha', 'rahi', 'rahe', 'vadh', 'din', 'kal', 'ajj'], # <-- Added common words
+            'bn': ['chai', 'korte', 'korbo', 'kori', 'amar', 'tumi', 'apni', 'ache', 'nei', 'ki', 'kothay', 'kobe', 'keno', 'bhalo', 'na', 'er', 'te', 'o', 'chilo', 'hobe', 'barche', 'komche', 'din', 'kal', 'aaj'], # <-- Added common words
+            'en': ['is', 'are', 'am', 'was', 'were', 'the', 'a', 'an', 'my', 'your', 'his', 'her', 'its', 'our', 'their', 'you', 'i', 'me', 'he', 'she', 'it', 'we', 'they', 'what', 'where', 'when', 'why', 'how', 'do', 'does', 'did', 'have', 'has', 'had', 'can', 'could', 'will', 'would', 'should', 'not', 'and', 'but', 'or', 'to', 'in', 'on', 'at', 'for', 'with', 'from', 'about', 'please', 'thank', 'hello', 'goodbye', 'yes', 'no', 'ok', 'pain', 'ache', 'day', 'yesterday', 'today'] # Added common words
         }
 
-        scores = {'en': 0.0, 'hi': 0.0, 'pa': 0.0, 'bn': 0.0} # Use floats for scores
+        scores = {'en': 0.0, 'hi': 0.0, 'pa': 0.0, 'bn': 0.0}
         unique_words_in_message = set(message_words)
-
-        # Calculate scores based on marker presence and frequency
         total_word_score = 0
+
         for word in unique_words_in_message:
-            word_score_added = False
+            lang_found = None
             for lang, marker_list in markers.items():
                 if word in marker_list:
-                    # Basic score for presence
                     scores[lang] += 1.0
-                    # Bonus for more unique/longer markers (simple heuristic)
-                    if len(word) > 3: scores[lang] += 0.5
-                    word_score_added = True
-            if word_score_added:
-                total_word_score += 1 # Count words that contributed to scores
+                    if len(word) > 3: scores[lang] += 0.5 # Bonus for longer/more specific markers
+                    lang_found = lang
+            if lang_found:
+                 total_word_score +=1
+                 # Penalize if a word exists in multiple marker lists (like 'hai')
+                 multi_lang_count = sum(1 for marker_list in markers.values() if word in marker_list)
+                 if multi_lang_count > 1 and lang_found != 'en':
+                     scores[lang_found] -= 0.3 # Reduce score slightly for common ambiguous words
 
-        # Normalize scores if multiple words were scored
+
         if total_word_score > 0:
-             for lang in scores:
-                 scores[lang] /= total_word_score
+            for lang in scores:
+                scores[lang] /= total_word_score # Basic normalization
 
-        # Apply simple rules for short messages
-        if word_count <= 4:
-            max_score = 0
-            best_lang = 'en' # Default
-            tied_langs = []
+        # Determine best language based on score
+        best_language = 'en' # Default
+        max_score_val = 0.0
+        if scores: # Check if scores dict is not empty
+             best_language = max(scores, key=scores.get)
+             max_score_val = scores[best_language]
 
-            for lang, score in scores.items():
-                if score > max_score:
-                    max_score = score
-                    best_lang = lang
-                    tied_langs = [lang]
-                elif score == max_score and score > 0: # Track ties only if score > 0
-                    tied_langs.append(lang)
-
-            # Handle ties in short messages (prefer non-English if clearly dominant)
-            if len(tied_langs) > 1:
-                if 'en' in tied_langs and len(tied_langs) == 2: # Tie between en and one other
-                    non_en_lang = tied_langs[0] if tied_langs[1] == 'en' else tied_langs[1]
-                    # Check if the non-english word is a very common one
-                    if any(w in unique_words_in_message for w in ['hai', 'ki', 'chai']):
-                         best_lang = non_en_lang # Prefer the non-english if common marker present
-                    else:
-                         best_lang = 'en' # Otherwise default to english for ambiguous tie
-                elif 'en' not in tied_langs and len(tied_langs) > 0: # Tie between non-english langs
-                     best_lang = tied_langs[0] # Just pick the first non-english one found
-                else: # Tie involving 'en' and multiple others, or only 'en' had score
-                     best_lang = 'en'
-
-            # Final check for short messages: require minimum evidence
-            if max_score < 0.3 and best_lang != 'en': # If score is low for non-english
-                # Check for any english word presence
-                if scores['en'] > 0 or any(w in unique_words_in_message for w in markers['en']):
-                     return 'en' # Default to english if ambiguous
-                elif not re.match(r'^[a-z0-9\s.,!?\'"]+$', message_lower):
-                     # If non-latin characters and still low score, maybe default to hindi as fallback? Or keep 'en'?
-                     # Let's keep 'en' for simplicity unless you have a better regional default.
-                     return 'en'
-            elif max_score > 0:
-                 return best_lang # Return determined language if score is reasonable
+        # --- Adjusted Logic for Short Messages ---
+        if word_count <= 3:
+            # Require a higher confidence score OR specific non-ambiguous marker for non-english short messages
+            if max_score_val > 0.5 or any(w in unique_words_in_message for w in ['kya', 'nahi', 'kive', 'nahin', 'chai', 'keno']): # Added specific markers check
+                 # If English score is also significant, lean towards English unless non-English is clearly dominant
+                 if scores['en'] > 0.3 and scores['en'] >= max_score_val * 0.8 and best_language != 'en':
+                      self.logger.debug(f"Short message ambiguous, defaulting EN. Scores: {scores}")
+                      return 'en'
+                 self.logger.debug(f"Short message detected: {best_language}. Scores: {scores}")
+                 return best_language
             else:
-                 # If no markers found at all, guess based on script/chars
-                 if re.match(r'^[a-z0-9\s.,!?\'"]+$', message_lower): return 'en'
-                 else: return 'en' # Fallback for non-latin, no markers
+                 # If confidence is low, check character types
+                 if re.match(r'^[a-z0-9\s.,!?\'"]+$', message_lower):
+                      self.logger.debug(f"Short low-conf Latin message, defaulting EN. Scores: {scores}")
+                      return 'en'
+                 else:
+                      # If non-latin chars but still low score, could be name/place, default English for safety
+                      self.logger.debug(f"Short low-conf non-Latin message, defaulting EN. Scores: {scores}")
+                      return 'en'
+        # --- End Adjusted Logic ---
 
-
-        # For longer messages, use the scores more directly
-        best_language = max(scores, key=scores.get)
-        max_score_val = scores[best_language]
-
-        # Check for ambiguity (e.g., English words mixed in heavily)
-        if best_language != 'en' and scores['en'] > max_score_val * 0.7: # If English score is high too
-            self.logger.debug(f"Ambiguous language detected (High EN score). Defaulting to EN. Scores: {scores}")
-            return 'en'
-        elif max_score_val > 0.2: # Require some minimal score for longer messages
-            self.logger.debug(f"Detected language: {best_language}. Scores: {scores}")
+        # For longer messages
+        if max_score_val > 0.3: # Slightly higher threshold for longer messages
+            # Check for ambiguity with English
+            if best_language != 'en' and scores['en'] > max_score_val * 0.7:
+                self.logger.debug(f"Long message ambiguous (High EN score). Defaulting EN. Scores: {scores}")
+                return 'en'
+            self.logger.debug(f"Long message detected: {best_language}. Scores: {scores}")
             return best_language
         else:
-            self.logger.debug(f"Low confidence language detection. Defaulting to EN. Scores: {scores}")
-            return 'en' # Default to English if scores are low
+            self.logger.debug(f"Long message low confidence. Defaulting EN. Scores: {scores}")
+            return 'en' # Default to English if overall confidence is low
 
     def _identify_user_needs(self, primary_intent: str) -> List[str]:
         """Identifies user needs based on intent."""
