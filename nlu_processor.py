@@ -105,7 +105,9 @@ class ProgressiveNLUProcessor:
             'daktar dekhate chai', 'appointment book korte chai', 'daktarer kache jabo',
             'appointment lagbe', 'appointment dao', 'daktar dekhabo', 'consultation chai',
             'daktarer shathe dekha korte chai', 'appointment nite chai', 'doctor checkup',
-            'ডাক্তার দেখাতে চাই', 'অ্যাপয়েন্টমেন্ট বুক করতে চাই', 'ডাক্তারের কাছে যাব', 'অ্যাপয়েন্টমেন্ট লাগবে'
+            'ডাক্তার দেখাতে চাই', 'অ্যাপয়েন্টমেন্ট বুক করতে চাই', 'ডাক্তারের কাছে যাব', 'অ্যাপয়েন্টমেন্ট লাগবে',
+            'अपॉइंटमेंट बुक', 'डॉक्टर से मिलना', 'अपॉइंटमेंट चाहिए', 'डॉक्टर दिखाएं', 'परामर्श चाहिए',
+            'अपॉइंटमेंट लेना है', 'अपॉइंटमेंट कराओ'
                 ],
                 'urgency_indicators': ['urgent', 'emergency', 'khub joruri', 'taratari', 'turant', 'jaldi', 'emergency hai', 'urgent hai', 'জরুরী', 'খুব তাড়াতাড়ি']
             },
@@ -186,7 +188,9 @@ class ProgressiveNLUProcessor:
             'jaundice', 'holud chamra', 'khub kashi', 'ojon kome jacche', 'durbol lagche',
             'khub jor', 'khub matha byatha', 'joint pain', 'chamray rash', 'pete khub byatha',
             'bomi ভাব', 'jol kome geche shorire',
-            'জ্বর হয়েছে', 'মাথা ব্যাথা', 'ব্যথা করছে', 'কাশি হচ্ছে', 'পেটে ব্যথা', 'শরীর খারাপ'
+            'জ্বর হয়েছে', 'মাথা ব্যাথা', 'ব্যথা করছে', 'কাশি হচ্ছে', 'পেটে ব্যথা', 'শরীর খারাপ',
+            'बुखार', 'सर दर्द', 'दर्द', 'खांसी', 'सर्दी', 'पेट दर्द', 'सीने में दर्द',
+             'बीमार', 'कमजोरी', 'उल्टी', 'दस्त', 'पीलिया'
                 ],
                 'urgency_indicators': ['severe pain', 'chest pain', 'breathing problem', 'emergency', 'accident', 'high fever', 'unconscious', 'severe vomiting', 'blood in stool',# --- ADD BENGALI ---
             'khub byatha', 'bukey byatha', 'shash nite koshto',
@@ -266,7 +270,9 @@ class ProgressiveNLUProcessor:
             'medicine scan koro', 'ei oshudh ta ki', 'medicine check koro', 'oshudh er naam ki',
             'medicine identify koro', 'oshudh scan korte chai', 'dawai check koro',
             'ei medicine ta ki', 'medicine scan korbo', 'oshudh ta dekho', 'medicine identify korte hobe',
-            'ওষুধ স্ক্যান করো', 'এই ওষুধটা কি', 'ওষুধ চেক করো', 'ওষুধের নাম'
+            'ওষুধ স্ক্যান করো', 'এই ওষুধটা কি', 'ওষুধ চেক করো', 'ওষুধের নাম',
+            'दवा स्कैन करें', 'दवाई स्कैन करें', 'यह क्या दवा है', 'दवा की पहचान करें',
+            'मेडिसिन स्कैन', 'गोली स्कैन'
                 ]
             },
             'emergency_assistance': {
@@ -337,7 +343,9 @@ class ProgressiveNLUProcessor:
                     # --- ADD BENGALI ---
             'kivabe appointment book korbo', 'appointment kivabe nebo', 'appointment book korar poddhoti',
             'schedule kivabe korbo', 'daktar kivabe book korbo',
-            'কিভাবে অ্যাপয়েন্টমেন্ট বুক করব', 'অ্যাপয়েন্টমেন্ট নেবার নিয়ম'
+            'কিভাবে অ্যাপয়েন্টমেন্ট বুক করব', 'অ্যাপয়েন্টমেন্ট নেবার নিয়ম',
+            'अपॉइंटमेंट कैसे बुक करें', 'डॉक्टर कैसे बुक करें', 'अपॉइंटमेंट कैसे लें',
+            'अपॉइंटमेंट कैसे बनाऊँ'
                 ]
             },
             'how_to_medicine_scan': {
@@ -355,7 +363,9 @@ class ProgressiveNLUProcessor:
                     'medicine scanner kaise use karu', 'dawai scanner kaise use karu',
                     'kivabe medicine scan korbo', 'oshudh scan korar upay', 'medicine kivabe identify korbo',
             'oshudh chenar upay', 'medicine check korbo kivabe', 'scanner kivabe use korbo',
-            'কিভাবে ওষুধ স্ক্যান করব', 'ওষুধ চেনার উপায়'
+            'কিভাবে ওষুধ স্ক্যান করব', 'ওষুধ চেনার উপায়',
+            'दवा कैसे स्कैन करें', 'दवाई कैसे स्कैन करें', 'मेडिसिन कैसे स्कैन करें',
+            'स्कैन कैसे करें'
                 ]
             },
             'how_to_prescription_upload': {
@@ -373,7 +383,9 @@ class ProgressiveNLUProcessor:
                     'dawai di parchi kaise upload karu', 'doctor di parchi kaise upload karu',
                     'kivabe prescription upload korbo', 'prescription upload korar poddhoti', 'prescription kivabe add korbo',
             'prescription er chobi kivabe debo', 'parchi kivabe upload korbo',
-            'কিভাবে প্রেসক্রিপশন আপলোড করব', 'প্রেসক্রিপশন যোগ করার নিয়ম'
+            'কিভাবে প্রেসক্রিপশন আপলোড করব', 'প্রেসক্রিপশন যোগ করার নিয়ম',
+            'प्रिस्क्रिप्शन कैसे अपलोड करें', 'पर्ची कैसे अपलोड करें', 'पर्ची कैसे डालें',
+            'प्रिस्क्रिप्शन कैसे स्कैन करें'
                 ]
             },
             'post_appointment_followup': {
@@ -449,7 +461,9 @@ class ProgressiveNLUProcessor:
             'prescription upload korte chai', 'prescription add korbo', 'prescription upload', 'prescription scan korbo',
             'prescription er chobi', 'daktarer prescription', 'medical prescription', 'prescription photo',
             'daktarer parchi upload', 'parchi add korbo', 'parchi scan korbo',
-            'প্রেসক্রিপশন আপলোড করতে চাই', 'প্রেসক্রিপশন যোগ করব', 'প্রেসক্রিপশনের ছবি'
+            'প্রেসক্রিপশন আপলোড করতে চাই', 'প্রেসক্রিপশন যোগ করব', 'প্রেসক্রিপশনের ছবি',
+            'प्रिस्क्रिप्शन अपलोड', 'पर्ची अपलोड करें', 'डॉक्टर की पर्ची', 'दवा की पर्ची',
+            'पर्ची स्कैन करें'
                 ]
             },
             'out_of_scope': {

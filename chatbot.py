@@ -1561,10 +1561,16 @@ def predict():
             if is_likely_symptom_followup:
                 logger.info(f"Correcting intent from '{primary_intent}' to 'symptom_triage' for follow-up.")
                 primary_intent = 'symptom_triage' # Override NLU intent
+                # --- ADDITION: Prevent marking as unrelated ---
+                is_unrelated_intent = False # Explicitly prevent task completion if it's a symptom follow-up
+                 # --- END ADDITION ---
 
         # Check if the user is trying to start a different task
         is_unrelated_intent = (
             task_in_progress and
+            # --- ADD EXCEPTION FOR SYMPTOM TRIAGE ---
+            task_in_progress != 'symptom_triage' and # Don't easily break symptom triage
+            # --- END ADDITION ---
             primary_intent not in related_booking_intents and
             (button_action is None or button_action not in related_booking_intents) and
             primary_intent not in related_symptom_intents and
@@ -1572,6 +1578,7 @@ def predict():
             primary_intent != task_in_progress and
             primary_intent != 'general_inquiry' # Allow general inquiries anytime
         )
+        
 
         if is_unrelated_intent:
             logger.warning(f"User {current_user.patient_id} switched intent from '{task_in_progress}' to '{primary_intent}'. Completing old task.")
@@ -1792,6 +1799,25 @@ def predict():
 
         # --- AI RESPONSE GENERATION ---
         logger.debug(f"Final AI Context: Intent={final_primary_intent_for_context}, Lang={response_language}")
+        # --- MODIFICATION: Simplify history for symptom triage AI call ---
+        ai_call_history = nlu_history # Default to full NLU history
+        if final_primary_intent_for_context == 'symptom_triage' and task_in_progress == 'symptom_triage':
+             # Send only initial symptom + last bot question + last user answer
+             symptom_context = _get_or_create_symptom_context(current_user.patient_id)
+             initial_symptom_msg = symptom_context.get('symptoms_reported', [''])[0]
+             simplified_history = []
+             if initial_symptom_msg:
+                  simplified_history.append({'role': 'user', 'content': f"(Initial symptom: {initial_symptom_msg})"})
+             # Get last bot question and last user answer from nlu_history if available
+             if len(nlu_history) >= 2:
+                  simplified_history.append(nlu_history[-2]) # Last bot message
+                  simplified_history.append(nlu_history[-1]) # Last user message
+             elif len(nlu_history) == 1:
+                  simplified_history.append(nlu_history[-1]) # Only last user message if that's all there is
+
+             ai_call_history = simplified_history
+             logger.debug(f"Using simplified history for symptom triage AI call: {ai_call_history}")
+        # --- END MODIFICATION ---
         context = {
             "user_intent": final_primary_intent_for_context,
             "context_history": nlu_history,
