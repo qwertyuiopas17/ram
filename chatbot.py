@@ -1471,10 +1471,15 @@ def predict():
 
         # --- LANGUAGE DETERMINATION LOGIC ---
         # Start with stored preference or fallback to detected, then 'en'
-        response_language = current_user.preferred_language or detected_language or 'en'
-        logger.debug(f"Initial language based on preference/detection/default: {response_language}")
+        # chatbot.py - Inside the /v1/predict function
 
-        # 1. Check for explicit language request in user message
+        # --- START: REVISED LANGUAGE DETERMINATION LOGIC ---
+        # Start with stored preference or English default
+        initial_response_language = current_user.preferred_language or 'en'
+        response_language = initial_response_language # Assume we'll stick with this unless overridden
+        logger.debug(f"Initial language based on preference/default: {initial_response_language}")
+
+        # 1. Check for explicit language request in user message (Highest Priority)
         explicit_request = None
         msg_lower = user_message.lower()
         if any(phrase in msg_lower for phrase in ['hindi mein', 'speak hindi', 'हिंदी में']): explicit_request = 'hi'
@@ -1485,20 +1490,32 @@ def predict():
         if explicit_request:
             response_language = explicit_request
             logger.info(f"Priority 1: User explicitly requested language: {response_language}")
-        # 2. Use detected language only if it's different and seems reliable (e.g., higher confidence than default preference)
-        #    This prevents switching back and forth too easily on ambiguous short messages.
-        elif detected_language and detected_language != response_language and nlu_understanding.get('confidence', 0.0) > 0.6: # Add confidence check
+
+        # 2. Use detected language ONLY if it's different AND seems reliable (e.g., higher confidence)
+        #    This allows adaptation but prevents flipping on short/ambiguous input.
+        elif detected_language and detected_language != initial_response_language and nlu_understanding.get('confidence', 0.0) > 0.65: # Slightly higher confidence threshold
             response_language = detected_language
             logger.info(f"Priority 2: Adapting to reliably detected language in message: {response_language}")
-        # 3. Use website language setting if provided, valid, and different
-        elif website_language and website_language in ['en', 'hi', 'pa', 'bn'] and website_language != response_language:
-             response_language = website_language
-             logger.info(f"Priority 3: Using website language setting passed from frontend: {response_language}")
-        # 4. Otherwise, stick with the initial language choice
-        else:
-             logger.info(f"Priority 4: Using preferred/default/detected language: {response_language}")
 
-        # --- Update user's preferred language in DB and memory if it changed ---
+        # 3. Stick to the established conversation language (User's Preference - NOW HIGHER PRIORITY than website setting)
+        #    This is the key change to maintain consistency during a conversation.
+        elif current_user.preferred_language:
+             response_language = current_user.preferred_language
+             logger.info(f"Priority 3: Maintaining established conversation language (user pref): {response_language}")
+
+        # 4. Use website language setting ONLY as an initial default or fallback if no preference is set
+        elif website_language and website_language in ['en', 'hi', 'pa', 'bn']:
+             response_language = website_language
+             logger.info(f"Priority 4: Using website language setting as fallback/initial: {response_language}")
+
+        # 5. Absolute fallback if none of the above applied (should rarely happen)
+        else:
+             response_language = 'en'
+             logger.info(f"Priority 5: Using absolute fallback language: {response_language}")
+        # --- END: REVISED LANGUAGE DETERMINATION LOGIC ---
+
+        # --- Update user's preferred language in DB and memory if the final language changed ---
+        # (This logic remains the same)
         if current_user.preferred_language != response_language:
             logger.info(f"Updating user {current_user.patient_id} preferred language from {current_user.preferred_language} to {response_language}")
             current_user.preferred_language = response_language
@@ -1514,7 +1531,10 @@ def predict():
                 logger.info(f"Successfully updated user {current_user.patient_id} preferred language in DB.")
             except Exception as db_err:
                  logger.error(f"Failed to update preferred language in DB: {db_err}")
-                 db.session.rollback() # Rollback DB change if update fails
+                 db.session.rollback()
+
+        # --- (Rest of your /v1/predict function: State Management, Task Logic, AI Call, Fallback, etc.) ---
+        # ...
 
         # --- STATE MANAGEMENT LOGIC ---
         task_in_progress = None
