@@ -48,16 +48,6 @@ class ProgressiveResponseGenerator:
                     ],
                     'action': 'NAVIGATE_TO_APPOINTMENT_BOOKING',
                     'parameters': {}
-                },
-                
-                'bn': {
-                    'responses': [
-                        "আমি আপনাকে ডাক্তারের সাথে অ্যাপয়েন্টমেন্ট বুক করতে সাহায্য করতে পারি। আপনি কোন ডাক্তারের সাথে দেখা করতে চান?",
-                        "অ্যাপয়েন্টমেন্ট বুক করার জন্য আমি সাহায্য করব। আপনি কি ধরনের ডাক্তার খুঁজছেন?",
-                        "চলুন আপনার অ্যাপয়েন্টমেন্ট বুক করি। আমি আপনাকে ডাক্তার নির্বাচন পৃষ্ঠায় নিয়ে যাচ্ছি।"
-                    ],
-                    'action': 'NAVIGATE_TO_APPOINTMENT_BOOKING',
-                    'parameters': {}
                 }
             },
             'appointment_view': {
@@ -244,9 +234,8 @@ class ProgressiveResponseGenerator:
                         "Let me guide you to the medicine scanner.",
                         "Use the scanner to identify your medicine."
                     ],
-                    'action': 'SHOW_GUIDANCE',
-                    'parameters': {},
-                    'interactive_buttons': [{"text": "📷 Open Scanner", "action": "START_MEDICINE_SCANNER", "parameters": {}, "style": "primary"}]
+                    'action': 'START_MEDICINE_SCANNER',
+                    'parameters': {}
                 },
                 'hi': {
                     'responses': [
@@ -254,10 +243,8 @@ class ProgressiveResponseGenerator:
                         "Medicine scanner tak le chalti hoon.",
                         "Medicine identify karne ke liye scanner use kariye."
                     ],
-                    'action': 'SHOW_GUIDANCE',
-                    'parameters': {},
-                    'interactive_buttons': [{"text": "📷 Open Scanner", "action": "START_MEDICINE_SCANNER", "parameters": {}, "style": "primary"}]
-
+                    'action': 'START_MEDICINE_SCANNER',
+                    'parameters': {}
                 },
                 'pa': {
                     'responses': [
@@ -265,19 +252,8 @@ class ProgressiveResponseGenerator:
                         "Medicine scanner tak le chalti haan.",
                         "Medicine identify karan layi scanner use karo."
                     ],
-                    'action': 'SHOW_GUIDANCE',
-                    'parameters': {},
-                    'interactive_buttons': [{"text": "📷 Open Scanner", "action": "START_MEDICINE_SCANNER", "parameters": {}, "style": "primary"}]
-                },
-                'bn': { # Add Bengali fallback too
-                    'responses': [
-                        "ঠিক আছে, আমি আপনার ওষুধ স্ক্যান করতে সাহায্য করতে পারি। অনুগ্রহ করে আপনার ক্যামেরা প্যাকেজিংয়ের দিকে নির্দেশ করুন।",
-                        "আসুন আপনার ওষুধ স্ক্যান করি। ওষুধটি ক্যামেরার সামনে স্পষ্টভাবে রাখুন।",
-                        "আপনার ওষুধ শনাক্ত করতে স্ক্যানার ব্যবহার করুন। নিশ্চিত করুন আলো যথেষ্ট।"
-                    ],
-                    'action': 'SHOW_GUIDANCE',
-                    'parameters': {},
-                    'interactive_buttons': [{"text": "📷 স্ক্যানার খুলুন", "action": "START_MEDICINE_SCANNER", "parameters": {}, "style": "primary"}]
+                    'action': 'START_MEDICINE_SCANNER',
+                    'parameters': {}
                 }
             },
             'emergency_assistance': {
@@ -362,15 +338,6 @@ class ProgressiveResponseGenerator:
                         "Main Sehat Sahara app navigate karan vich tuhadi madad layi haan. Appointment book karna, medicine labhna, health records check karna - sab vich madad kar sakdi haan.",
                         "Sehat Sahara vich tuhada swagat hai! Main appointments, health records, pharmacy labhne, te emergency help vich madad kar sakdi haan.",
                         "Main tuhadi health assistant haan. Doctor appointments, medicine di jankari, symptom checking, te app navigation vich madad kar sakdi haan."
-                    ],
-                    'action': 'SHOW_APP_FEATURES',
-                    'parameters': {}
-                },
-                'bn': {
-                    'responses': [
-                        "আমি এখানে सेहत सहारा অ্যাপ নেভিগেট করতে সাহায্য করার জন্য আছি। আমি অ্যাপয়েন্টমেন্ট বুকিং, ওষুধ খোঁজা, স্বাস্থ্য রেকর্ড পরীক্ষা এবং আরও অনেক কিছুতে সাহায্য করতে পারি।",
-                        "সেহত সাহারায় স্বাগতম! আমি অ্যাপয়েন্টমেন্ট, স্বাস্থ্য রেকর্ড, ফার্মেসি খোঁজা এবং জরুরি সহায়তায় সাহায্য করতে পারি।",
-                        "আমি আপনার স্বাস্থ্য সহায়ক। আমি ডাক্তারের অ্যাপয়েন্টমেন্ট, ওষুধের তথ্য, উপসর্গের পরীক্ষা এবং অ্যাপ নেভিগেশনে সাহায্য করতে পারি।"
                     ],
                     'action': 'SHOW_APP_FEATURES',
                     'parameters': {}
@@ -490,16 +457,6 @@ class ProgressiveResponseGenerator:
                     ],
                     'action': 'CONNECT_TO_SUPPORT_AGENT',
                     'parameters': {'reason': 'out_of_scope'}
-                },
-                
-                'bn': {
-                    'responses': [
-                        "আমি স্বাস্থ্য-সম্পর্কিত প্রশ্ন এবং অ্যাপ নেভিগেশনে সাহায্য করার জন্য ডিজাইন করা হয়েছি। অন্যান্য প্রশ্নের জন্য, আপনি কি একজন মানব सेहत साथी-র সাথে কথা বলতে চান?",
-                        "আমি শুধুমাত্র স্বাস্থ্য এবং মেডিকেল অ্যাপ বৈশিষ্ট্যগুলির সাথে সহায়তা করতে পারি। অন্যান্য প্রশ্নের জন্য আমি কি আপনাকে একজন সহায়তা এজেন্টের সাথে সংযুক্ত করব?",
-                        "আমি স্বাস্থ্য সহায়তার উপর ফোকাস করি। অ-স্বাস্থ্য সম্পর্কিত প্রশ্নের জন্য, আমি আপনাকে আমাদের সহায়তা দলের সাথে সংযুক্ত করতে পারি।"
-                    ],
-                    'action': 'CONNECT_TO_SUPPORT_AGENT',
-                    'parameters': {'reason': 'out_of_scope'}
                 }
             }
         }
@@ -563,15 +520,6 @@ class ProgressiveResponseGenerator:
                 ],
                 'action': 'CONNECT_TO_SUPPORT_AGENT',
                 'parameters': {'reason': 'unclear_request'}
-            },
-            'bn': {
-                'responses': [
-                    "আমি চিকিৎসা পরামর্শ দিতে পারি না, তবে আমি আপনাকে একজন যোগ্য ডাক্তারের সাথে সংযোগ করতে সাহায্য করতে পারি। আপনি কি একটি পরামর্শ বুক করতে চান?",
-                    "চিকিৎসা পরামর্শের জন্য, অনুগ্রহ করে একজন যোগ্য স্বাস্থ্যসেবা পেশাদারের সাথে পরামর্শ করুন। আমি একটি অ্যাপয়েন্টমেন্ট বুক করতে সাহায্য করতে পারি।",
-                    "আমি চিকিৎসা পরামর্শ দেওয়ার জন্য যোগ্য নই। আমাকে একজন ডাক্তারের সাথে সংযোগ করতে দিন যিনি আপনাকে সঠিকভাবে সহায়তা করতে পারেন।"
-                ],
-                'action': 'NAVIGATE_TO_APPOINTMENT_BOOKING',
-                'parameters': {'reason': 'medical_advice_needed'}
             }
         }
     # Add this new function inside the ProgressiveResponseGenerator class in ko.py
@@ -638,8 +586,7 @@ class ProgressiveResponseGenerator:
                          user_message: str,
                          nlu_result: Dict[str, Any],
                          user_context: Dict[str, Any] = None,
-                         conversation_history: List[Dict[str, str]] = None,
-                         language: str = None) -> Dict[str, Any]:
+                         conversation_history: List[Dict[str, str]] = None) -> Dict[str, Any]:
         """
         Generate action-oriented response for Sehat Sahara Health Assistant.
         Returns a dictionary with 'response' text and 'action' for the mobile app.
@@ -684,7 +631,7 @@ class ProgressiveResponseGenerator:
             
         except Exception as e:
             self.logger.error(f"Error generating response: {e}")
-            return self._get_fallback_response(language or 'en')
+            return self._get_fallback_response(language)
 
     def _is_medical_advice_request(self, message: str) -> bool:
         """Check if user is asking for medical advice."""
@@ -749,9 +696,7 @@ class ProgressiveResponseGenerator:
         fallback_responses = {
             'en': "I'm having trouble right now. Let me connect you with a support agent.",
             'hi': "Mujhe abhi problem aa rahi hai. Support agent se connect kar deti hoon.",
-            'pa': "Minu abhi problem aa rahi hai. Support agent naal connect kar dendi haan.",
-            # --- ADD BENGALI ---
-            'bn': "আমার এখন সমস্যা হচ্ছে। আমাকে একজন সহায়তা এজেন্টের সাথে সংযুক্ত করতে দিন।"
+            'pa': "Minu abhi problem aa rahi hai. Support agent naal connect kar dendi haan."
         }
         
         return {

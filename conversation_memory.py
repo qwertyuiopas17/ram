@@ -164,31 +164,22 @@ class ProgressiveConversationMemory:
     
     # In conversation_memory.py
 
-    # Make sure create_or_get_user uses the kwarg
+    # Replace the create_or_get_user function with this corrected version:
     def create_or_get_user(self, user_id: str, **kwargs) -> UserProfile:
+        """Create or retrieve user profile"""
         if user_id not in self.user_profiles:
             self.user_profiles[user_id] = UserProfile(
                 user_id=user_id,
-                patient_id=kwargs.get('patient_id', user_id),
+                patient_id=kwargs.get('patient_id', user_id), # Use user_id as fallback
                 full_name=kwargs.get('full_name', ''),
-                preferred_language=kwargs.get('preferred_language', 'hi'), # <<< Make sure this uses the kwarg
+                preferred_language=kwargs.get('preferred_language', 'hi'),
                 location=kwargs.get('location', '')
                 )
-            self.logger.info(f"Created new user profile for: {user_id} with lang {kwargs.get('preferred_language', 'hi')}")
-    # Update existing profile language if provided
-        elif 'preferred_language' in kwargs and self.user_profiles[user_id].preferred_language != kwargs['preferred_language']:
-            self.user_profiles[user_id].preferred_language = kwargs['preferred_language']
-            self.logger.info(f"Updated existing profile language for {user_id} to {kwargs['preferred_language']}")
-
+            self.logger.info(f"Created new user profile for: {user_id}")
+    
+    # Always return the existing or newly created profile
         return self.user_profiles[user_id]
     
-    # Add a method to explicitly update language if needed from chatbot.py
-    def update_preferred_language(self, user_id: str, language: str):
-        profile = self.create_or_get_user(user_id)
-        if profile.preferred_language != language:
-            profile.preferred_language = language
-            self.logger.info(f"Updated preferred language in memory for {user_id} to {language}")
-
     def add_conversation_turn(self,
                              user_id: str,
                              user_message: str,

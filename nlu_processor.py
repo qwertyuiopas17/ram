@@ -101,15 +101,8 @@ class ProgressiveNLUProcessor:
                     # Punjabi variations with English combinations
                     'doctor appointment book', 'appointment book punjabi', 'doctor nu milna book',
                     'appointment chahida doctor', 'doctor nu dikhana appointment'
-                    # --- ADD BENGALI ---
-            'daktar dekhate chai', 'appointment book korte chai', 'daktarer kache jabo',
-            'appointment lagbe', 'appointment dao', 'daktar dekhabo', 'consultation chai',
-            'daktarer shathe dekha korte chai', 'appointment nite chai', 'doctor checkup',
-            'ডাক্তার দেখাতে চাই', 'অ্যাপয়েন্টমেন্ট বুক করতে চাই', 'ডাক্তারের কাছে যাব', 'অ্যাপয়েন্টমেন্ট লাগবে',
-            'अपॉइंटमेंट बुक', 'डॉक्टर से मिलना', 'अपॉइंटमेंट चाहिए', 'डॉक्टर दिखाएं', 'परामर्श चाहिए',
-            'अपॉइंटमेंट लेना है', 'अपॉइंटमेंट कराओ'
                 ],
-                'urgency_indicators': ['urgent', 'emergency', 'khub joruri', 'taratari', 'turant', 'jaldi', 'emergency hai', 'urgent hai', 'জরুরী', 'খুব তাড়াতাড়ি']
+                'urgency_indicators': ['urgent', 'emergency', 'turant', 'jaldi', 'emergency hai', 'urgent hai']
             },
             'appointment_view': {
                 'keywords': [
@@ -121,12 +114,7 @@ class ProgressiveNLUProcessor:
                     'kab hai appointment', 'appointment ki jankari',
                     # Punjabi (Latin script)
                     'meri appointment kado hai', 'appointment kado hai', 'appointment dekhan hai',
-                    'appointment da time', 'appointment di jankari',
-                    # --- ADD BENGALI ---
-            'amar appointment kobe', 'appointment kokhon', 'appointment dekhte chai',
-            'kobe appointment ache', 'appointment er detail', 'appointment dekhbo',
-            'আমার অ্যাপয়েন্টমেন্ট কবে', 'অ্যাপয়েন্টমেন্ট কখন', 'অ্যাপয়েন্টমেন্ট দেখবো'
-        
+                    'appointment da time', 'appointment di jankari'
                 ]
             },
             'appointment_cancel': {
@@ -152,11 +140,7 @@ class ProgressiveNLUProcessor:
                     'pichli report', 'dawai ki history', 'report dikhao',
                     # Punjabi (Latin script)
                     'meri report', 'blood report', 'test da result', 'medical record',
-                    'pichli report', 'dawai di history', 'report dikhao',
-                    # --- ADD BENGALI ---
-            'amar report', 'blood report', 'test er result', 'medical record', 'health record',
-            'ag er report', 'report dekhbo', 'amar history', 'prescription history', 'report dekhau',
-            'আমার রিপোর্ট', 'ব্লাড রিপোর্ট', 'টেস্টের রেজাল্ট', 'মেডিকেল রেকর্ড'
+                    'pichli report', 'dawai di history', 'report dikhao'
                 ]
             },
             'symptom_triage': {
@@ -180,21 +164,9 @@ class ProgressiveNLUProcessor:
                     'ulti ho rahi hai', 'dast aa rahe hain', 'piliya hai', 'peeli chamdi',
                     'khansi nahi rukdi', 'vajan kam ho raha hai', 'thakan mahsus ho rahi hai',
                     'kamzori hai', 'tez bukhar', 'tez sir dard', 'joint pain', 'chamdi te rash',
-                    'pet vich dard', 'ghabrahat', 'dehydration',
-                    # --- ADD BENGALI ---
-            'jor hoyeche', 'matha byatha', 'byatha korche', 'kashi hocche', 'thanda legeche',
-            'pete byatha', 'bukey byatha', 'shorir kharap lagche', 'oshustho lagche',
-            'symptom bolchi', 'body pain', 'kapuni dicche', 'bomi hocche', 'pet kharap',
-            'jaundice', 'holud chamra', 'khub kashi', 'ojon kome jacche', 'durbol lagche',
-            'khub jor', 'khub matha byatha', 'joint pain', 'chamray rash', 'pete khub byatha',
-            'bomi ভাব', 'jol kome geche shorire',
-            'জ্বর হয়েছে', 'মাথা ব্যাথা', 'ব্যথা করছে', 'কাশি হচ্ছে', 'পেটে ব্যথা', 'শরীর খারাপ',
-            'बुखार', 'सर दर्द', 'दर्द', 'खांसी', 'सर्दी', 'पेट दर्द', 'सीने में दर्द',
-             'बीमार', 'कमजोरी', 'उल्टी', 'दस्त', 'पीलिया'
+                    'pet vich dard', 'ghabrahat', 'dehydration'
                 ],
-                'urgency_indicators': ['severe pain', 'chest pain', 'breathing problem', 'emergency', 'accident', 'high fever', 'unconscious', 'severe vomiting', 'blood in stool',# --- ADD BENGALI ---
-            'khub byatha', 'bukey byatha', 'shash nite koshto',
-            'khub jor', 'ogyan hoye geche', 'khub bomi', 'rokto porche', 'ভীষণ ব্যথা', 'বুকে ব্যথা', 'শ্বাসকষ্ট']
+                'urgency_indicators': ['severe pain', 'chest pain', 'breathing problem', 'emergency', 'accident', 'high fever', 'unconscious', 'severe vomiting', 'blood in stool']
             },
             'find_medicine': {
                 'keywords': [
@@ -206,11 +178,7 @@ class ProgressiveNLUProcessor:
                     'medicine kahan hai', 'dawai ki dukan',
                     # Punjabi (Latin script)
                     'dawai kithe milegi', 'medicine shop', 'pharmacy', 'dawai leni hai',
-                    'medicine kithe hai', 'dawai di dukan',
-                    # --- ADD BENGALI ---
-            'oshudh kothay pabo', 'medicine dokan', 'pharmacy kothay', 'oshudh kinte chai',
-            'medicine ache ki', 'pharmacy khujchi', 'oshudher dokan',
-            'ওষুধ কোথায় পাবো', 'ফার্মেসি কোথায়', 'ওষুধ কিনতে চাই'
+                    'medicine kithe hai', 'dawai di dukan'
                 ]
             },
             'prescription_inquiry': {
@@ -231,14 +199,7 @@ class ProgressiveNLUProcessor:
                     'medicine kado leni hai', 'dawai di jankari', 'dawai upload karo',
                     'dawai di parchi upload', 'dawai di parchi dekho', 'dawai di parchi',
                     'doctor di parchi', 'prescription upload', 'prescription dikhao',
-                    'dawai di photo', 'dawai da paper', 'dawai di slip',
-                    # --- ADD BENGALI ---
-            'oshudh kivabe khete hobe', 'koto ta tablet', 'oshudh kokhon khabo',
-            'medicine er nirdesh', 'dawai er detail', 'prescription upload',
-            'prescription dekhte chai', 'prescription add korbo', 'prescription er chobi',
-            'daktarer prescription', 'medical prescription', 'oshudher paper',
-            'ওষুধ কিভাবে খাবো', 'কখন খাবো', 'প্রেসক্রিপশন আপলোড', 'প্রেসক্রিপশন দেখাও'
-
+                    'dawai di photo', 'dawai da paper', 'dawai di slip'
                 ]
             },
             'medicine_scan': {
@@ -265,14 +226,7 @@ class ProgressiveNLUProcessor:
                     'dawai da naam dasso', 'medicine scan karna hai', 'dawai vekhan hai',
                     # Punjabi variations with English combinations
                     'medicine scan punjabi', 'dawai scan english', 'medicine check karna',
-                    'dawai scan karo na', 'medicine scan chahida', 'dawai scan de deo',
-                    # --- ADD BENGALI ---
-            'medicine scan koro', 'ei oshudh ta ki', 'medicine check koro', 'oshudh er naam ki',
-            'medicine identify koro', 'oshudh scan korte chai', 'dawai check koro',
-            'ei medicine ta ki', 'medicine scan korbo', 'oshudh ta dekho', 'medicine identify korte hobe',
-            'ওষুধ স্ক্যান করো', 'এই ওষুধটা কি', 'ওষুধ চেক করো', 'ওষুধের নাম',
-            'दवा स्कैन करें', 'दवाई स्कैन करें', 'यह क्या दवा है', 'दवा की पहचान करें',
-            'मेडिसिन स्कैन', 'गोली स्कैन'
+                    'dawai scan karo na', 'medicine scan chahida', 'dawai scan de deo'
                 ]
             },
             'emergency_assistance': {
@@ -285,13 +239,9 @@ class ProgressiveNLUProcessor:
                     'turant help chahiye', 'emergency call',
                     # Punjabi (Latin script)
                     'emergency hai', 'help karo', 'accident ho gaya hai', 'ambulance chahida',
-                    'turant help chahidi', 'emergency call',
-                    # --- ADD BENGALI ---
-            'help korun', 'accident hoyeche', 'urgent help chai',
-             'taratari help korun', 'bipod',
-            'জরুরী', 'সাহায্য করুন', 'অ্যাম্বুলেন্স', 'খুব দরকার'
+                    'turant help chahidi', 'emergency call'
                 ],
-                'urgency_indicators': ['emergency', 'accident', 'ambulance', 'urgent', 'help', 'জরুরী', 'অ্যাম্বুলেন্স', 'তাড়াতাড়ি']
+                'urgency_indicators': ['emergency', 'accident', 'ambulance', 'urgent', 'help']
             },
             'report_issue': {
                 'keywords': [
@@ -303,11 +253,7 @@ class ProgressiveNLUProcessor:
                     'problem hai', 'shikayat hai',
                     # Punjabi (Latin script)
                     'complaint hai', 'doctor rude si', 'zyada paisa liya', 'service kharab si',
-                    'problem hai', 'shikayat hai',
-                    # --- ADD BENGALI ---
-            'complaint ache', 'daktar kharap behave koreche', 'beshi taka niyeche', 'service bhalo na',
-            'problem report korbo', 'feedback dite chai', 'shomoshha hocche', 'obhijog ache',
-            'অভিযোগ আছে', 'খারাপ ব্যবহার', 'বেশি টাকা', 'সমস্যা'
+                    'problem hai', 'shikayat hai'
                 ]
             },
             'general_inquiry': {
@@ -320,11 +266,7 @@ class ProgressiveNLUProcessor:
                     'kaise kaam karta hai', 'guide karo',
                     # Punjabi (Latin script)
                     'app kive use karna hai', 'help chahidi', 'app dian features',
-                    'kive kaam karda hai', 'guide karo',
-                    # --- ADD BENGALI ---
-            'app kivabe use korbo', 'help chai', 'app er features ki', 'kivabe kaj kore',
-            'guide korun', 'tutorial dao', 'ki korte paren',
-            'অ্যাপ কিভাবে ব্যবহার করব', 'সাহায্য চাই', 'কি কি ফিচার আছে'
+                    'kive kaam karda hai', 'guide karo'
                 ]
             },
             'how_to_appointment_booking': {
@@ -339,13 +281,7 @@ class ProgressiveNLUProcessor:
                     # Punjabi (Latin script)
                     'appointment kaise book karu', 'appointment kaise karu', 'appointment kaise banaun',
                     'appointment kaise fix karu', 'appointment kaise schedule karu', 'doctor kaise book karu',
-                    'doctor naal kaise milu', 'appointment kaise chahida',
-                    # --- ADD BENGALI ---
-            'kivabe appointment book korbo', 'appointment kivabe nebo', 'appointment book korar poddhoti',
-            'schedule kivabe korbo', 'daktar kivabe book korbo',
-            'কিভাবে অ্যাপয়েন্টমেন্ট বুক করব', 'অ্যাপয়েন্টমেন্ট নেবার নিয়ম',
-            'अपॉइंटमेंट कैसे बुक करें', 'डॉक्टर कैसे बुक करें', 'अपॉइंटमेंट कैसे लें',
-            'अपॉइंटमेंट कैसे बनाऊँ'
+                    'doctor naal kaise milu', 'appointment kaise chahida'
                 ]
             },
             'how_to_medicine_scan': {
@@ -360,12 +296,7 @@ class ProgressiveNLUProcessor:
                     # Punjabi (Latin script)
                     'medicine kaise scan karu', 'dawai kaise scan karu', 'medicine kaise check karu',
                     'dawai kaise identify karu', 'medicine kaise pehchanu', 'dawai kaise pehchanu',
-                    'medicine scanner kaise use karu', 'dawai scanner kaise use karu',
-                    'kivabe medicine scan korbo', 'oshudh scan korar upay', 'medicine kivabe identify korbo',
-            'oshudh chenar upay', 'medicine check korbo kivabe', 'scanner kivabe use korbo',
-            'কিভাবে ওষুধ স্ক্যান করব', 'ওষুধ চেনার উপায়',
-            'दवा कैसे स्कैन करें', 'दवाई कैसे स्कैन करें', 'मेडिसिन कैसे स्कैन करें',
-            'स्कैन कैसे करें'
+                    'medicine scanner kaise use karu', 'dawai scanner kaise use karu'
                 ]
             },
             'how_to_prescription_upload': {
@@ -380,12 +311,7 @@ class ProgressiveNLUProcessor:
                     # Punjabi (Latin script)
                     'prescription kaise upload karu', 'parchi kaise upload karu', 'prescription kaise add karu',
                     'parchi kaise add karu', 'prescription kaise scan karu', 'parchi kaise scan karu',
-                    'dawai di parchi kaise upload karu', 'doctor di parchi kaise upload karu',
-                    'kivabe prescription upload korbo', 'prescription upload korar poddhoti', 'prescription kivabe add korbo',
-            'prescription er chobi kivabe debo', 'parchi kivabe upload korbo',
-            'কিভাবে প্রেসক্রিপশন আপলোড করব', 'প্রেসক্রিপশন যোগ করার নিয়ম',
-            'प्रिस्क्रिप्शन कैसे अपलोड करें', 'पर्ची कैसे अपलोड करें', 'पर्ची कैसे डालें',
-            'प्रिस्क्रिप्शन कैसे स्कैन करें'
+                    'dawai di parchi kaise upload karu', 'doctor di parchi kaise upload karu'
                 ]
             },
             'post_appointment_followup': {
@@ -401,12 +327,7 @@ class ProgressiveNLUProcessor:
                     # Punjabi (Latin script)
                     'hunn changa lag raha hai', 'appointment changa si', 'doctor ne madad kiti', 'hunn vi bura lag raha hai',
                     'appointment ton fayda hoya', 'doctor ne sahi dassi', 'changa nahi lag raha', 'phir doctor kol jana hai',
-                    'appointment feedback', 'appointment kaisa si', 'doctor naal consultation',
-                    # --- ADD BENGALI ---
-            'ekhon bhalo lagche', 'appointment bhalo hoyeche', 'daktar help koreche', 'ekhono kharap lagche',
-            'appointment kaaj diyeche', 'daktar thik boleche', 'bhalo lagche na', 'abar daktar dekhate hobe',
-            'appointment er feedback', 'kemon holo appointment', 'consultation kemon chilo',
-            'এখন ভালো লাগছে', 'অ্যাপয়েন্টমেন্ট ভালো ছিল', 'এখনও খারাপ লাগছে'
+                    'appointment feedback', 'appointment kaisa si', 'doctor naal consultation'
                 ]
             },
             'prescription_summary_request': {
@@ -419,11 +340,7 @@ class ProgressiveNLUProcessor:
                     'kya dawaiyan', 'prescription details', 'doctor ki salah', 'dawai summary',
                     # Punjabi (Latin script)
                     'doctor ne ki likhya', 'prescription summary dikhao', 'dawai di list', 'doctor di prescription',
-                    'ki dawaiyan', 'prescription details', 'doctor di salah', 'dawai summary',
-                    # --- ADD BENGALI ---
-            'daktar ki likheche', 'prescription summary dekhau', 'oshudher list', 'daktarer prescription',
-            'ki ki oshudh', 'prescription er detail', 'daktarer poramorsho', 'oshudher summary',
-            'ডাক্তার কি লিখেছেন', 'প্রেসক্রিপশন সারাংশ দেখাও', 'ওষুধের লিস্ট'
+                    'ki dawaiyan', 'prescription details', 'doctor di salah', 'dawai summary'
                 ]
             },
             'set_medicine_reminder': {
@@ -436,11 +353,7 @@ class ProgressiveNLUProcessor:
                     'dawai ka alarm', 'tablet reminder',
                     # Punjabi (Latin script)
                     'reminder set karo', 'dawai da reminder', 'dawai lain da reminder', 'medicine reminder',
-                    'dawai da alarm', 'tablet reminder',
-                    # --- ADD BENGALI ---
-            'reminder set koro', 'oshudher reminder', 'medicine khawar reminder', 'schedule medicine',
-            'add medicine reminder', 'oshudher alarm', 'tablet reminder',
-            'রিমাইন্ডার সেট করো', 'ওষুধের রিমাইন্ডার'
+                    'dawai da alarm', 'tablet reminder'
                 ]
             },
             'prescription_upload': {
@@ -456,14 +369,7 @@ class ProgressiveNLUProcessor:
                     # Punjabi (Latin script)
                     'dawai di parchi upload', 'parchi upload karo', 'dawai di parchi', 'doctor di parchi',
                     'parchi add karo', 'parchi scan karo', 'dawai da paper upload', 'dawai di slip',
-                    'parchi di photo', 'dawai di parchi dikhao', 'parchi upload',
-                    # --- ADD BENGALI ---
-            'prescription upload korte chai', 'prescription add korbo', 'prescription upload', 'prescription scan korbo',
-            'prescription er chobi', 'daktarer prescription', 'medical prescription', 'prescription photo',
-            'daktarer parchi upload', 'parchi add korbo', 'parchi scan korbo',
-            'প্রেসক্রিপশন আপলোড করতে চাই', 'প্রেসক্রিপশন যোগ করব', 'প্রেসক্রিপশনের ছবি',
-            'प्रिस्क्रिप्शन अपलोड', 'पर्ची अपलोड करें', 'डॉक्टर की पर्ची', 'दवा की पर्ची',
-            'पर्ची स्कैन करें'
+                    'parchi di photo', 'dawai di parchi dikhao', 'parchi upload'
                 ]
             },
             'out_of_scope': {
@@ -476,10 +382,7 @@ class ProgressiveNLUProcessor:
                     'kahani sunao', 'khel',
                     # Punjabi (Latin script)
                     'mausam kaida hai', 'news ki hai', 'joke sunao', 'gana gao',
-                    'kahani sunao', 'khel',
-                    'weather kemon', 'khobor ki', 'khela', 'cinema', 'gaan', 'joke bolo', 'golpo bolo',
-            'gaan koro', 'khela dekhbo',
-            'আবহাওয়া কেমন', 'খবর কি', 'জোক বলো', 'গল্প শোনাও'
+                    'kahani sunao', 'khel'
                 ]
             }
         }
@@ -1317,92 +1220,86 @@ Consider:
                 break
         
         return context
-    # In nlu_processor.py
 
     def _detect_language(self, message: str) -> str:
         """Improved language detection with better accuracy for mixed content."""
         if not message or not message.strip():
-            return 'en' # Default to English for empty messages
+            return 'en'
 
-        message_lower = message.lower().strip()
-        message_words = message_lower.split()
-        word_count = len(message_words)
+        message = message.strip()
+        message_lower = message.lower()
 
-        # 1. Script-based detection (Highest Priority)
-        if re.search(r'[\u0900-\u097F]', message): return 'hi'  # Devanagari
-        if re.search(r'[\u0A00-\u0A7F]', message): return 'pa'  # Gurmukhi
-        if re.search(r'[\u0980-\u09FF]', message): return 'bn'  # Bengali Script
+        # Script-based detection (highest priority)
+        script_hindi = bool(re.search(r'[\u0900-\u097F]', message))  # Devanagari script
+        script_punjabi = bool(re.search(r'[\u0A00-\u0A7F]', message))  # Gurmukhi script
 
-        # 2. Strong Language Markers
-        markers = {
-            'hi': ['hai', 'hain', 'kya', 'kaise', 'kab', 'kahan', 'kyon', 'kyu', 'mera', 'meri', 'mujhe', 'mujhko', 'aap', 'aapko', 'tum', 'tumko', 'kar', 'karo', 'karna', 'nahi', 'liye', 'se', 'ko', 'mein', 'par', 'aur', 'bhi', 'tha', 'thi', 'the', 'hoon', 'ho', 'hoga', 'hogi', 'raha', 'rahi', 'rahe', 'badh', 'kam', 'din', 'kal', 'aaj'], # <-- Added common words
-            'pa': ['hai', 'han', 'ki', 'kive', 'kado', 'kithe', 'kyon', 'kyu', 'mera', 'meri', 'mainu', 'tusi', 'tuhada', 'tera', 'teri', 'kar', 'karo', 'karna', 'nahi', 'nahin', 'lai', 'ton', 'nu', 'vich', 'te', 'vi', 'si', 'san', 'haan', 'ho', 'hovega', 'hovegi', 'reha', 'rahi', 'rahe', 'vadh', 'din', 'kal', 'ajj'], # <-- Added common words
-            'bn': ['chai', 'korte', 'korbo', 'kori', 'amar', 'tumi', 'apni', 'ache', 'nei', 'ki', 'kothay', 'kobe', 'keno', 'bhalo', 'na', 'er', 'te', 'o', 'chilo', 'hobe', 'barche', 'komche', 'din', 'kal', 'aaj'], # <-- Added common words
-            'en': ['is', 'are', 'am', 'was', 'were', 'the', 'a', 'an', 'my', 'your', 'his', 'her', 'its', 'our', 'their', 'you', 'i', 'me', 'he', 'she', 'it', 'we', 'they', 'what', 'where', 'when', 'why', 'how', 'do', 'does', 'did', 'have', 'has', 'had', 'can', 'could', 'will', 'would', 'should', 'not', 'and', 'but', 'or', 'to', 'in', 'on', 'at', 'for', 'with', 'from', 'about', 'please', 'thank', 'hello', 'goodbye', 'yes', 'no', 'ok', 'pain', 'ache', 'day', 'yesterday', 'today'] # Added common words
-        }
+        if script_hindi:
+            return 'hi'
+        elif script_punjabi:
+            return 'pa'
 
-        scores = {'en': 0.0, 'hi': 0.0, 'pa': 0.0, 'bn': 0.0}
-        unique_words_in_message = set(message_words)
-        total_word_score = 0
-
-        for word in unique_words_in_message:
-            lang_found = None
-            for lang, marker_list in markers.items():
-                if word in marker_list:
-                    scores[lang] += 1.0
-                    if len(word) > 3: scores[lang] += 0.5 # Bonus for longer/more specific markers
-                    lang_found = lang
-            if lang_found:
-                 total_word_score +=1
-                 # Penalize if a word exists in multiple marker lists (like 'hai')
-                 multi_lang_count = sum(1 for marker_list in markers.values() if word in marker_list)
-                 if multi_lang_count > 1 and lang_found != 'en':
-                     scores[lang_found] -= 0.3 # Reduce score slightly for common ambiguous words
-
-
-        if total_word_score > 0:
-            for lang in scores:
-                scores[lang] /= total_word_score # Basic normalization
-
-        # Determine best language based on score
-        best_language = 'en' # Default
-        max_score_val = 0.0
-        if scores: # Check if scores dict is not empty
-             best_language = max(scores, key=scores.get)
-             max_score_val = scores[best_language]
-
-        # --- Adjusted Logic for Short Messages ---
+        word_count = len(message.split())
         if word_count <= 3:
-            # Require a higher confidence score OR specific non-ambiguous marker for non-english short messages
-            if max_score_val > 0.5 or any(w in unique_words_in_message for w in ['kya', 'nahi', 'kive', 'nahin', 'chai', 'keno']): # Added specific markers check
-                 # If English score is also significant, lean towards English unless non-English is clearly dominant
-                 if scores['en'] > 0.3 and scores['en'] >= max_score_val * 0.8 and best_language != 'en':
-                      self.logger.debug(f"Short message ambiguous, defaulting EN. Scores: {scores}")
-                      return 'en'
-                 self.logger.debug(f"Short message detected: {best_language}. Scores: {scores}")
-                 return best_language
-            else:
-                 # If confidence is low, check character types
-                 if re.match(r'^[a-z0-9\s.,!?\'"]+$', message_lower):
-                      self.logger.debug(f"Short low-conf Latin message, defaulting EN. Scores: {scores}")
-                      return 'en'
-                 else:
-                      # If non-latin chars but still low score, could be name/place, default English for safety
-                      self.logger.debug(f"Short low-conf non-Latin message, defaulting EN. Scores: {scores}")
-                      return 'en'
-        # --- End Adjusted Logic ---
+            # Check for definitive language markers
+            hindi_markers = ['hai', 'kya', 'nahi', 'chahiye', 'karna', 'mera', 'meri', 'tera', 'teri']
+            punjabi_markers = ['hai', 'ki', 'nahin', 'chahidi', 'karna', 'mera', 'meri', 'tera', 'teri', 'kado', 'kithe', 'kive']
+            english_markers = ['the', 'is', 'are', 'do', 'have', 'my', 'i', 'you', 'this', 'that', 'what', 'how', 'when', 'where', 'why']
 
-        # For longer messages
-        if max_score_val > 0.3: # Slightly higher threshold for longer messages
-            # Check for ambiguity with English
-            if best_language != 'en' and scores['en'] > max_score_val * 0.7:
-                self.logger.debug(f"Long message ambiguous (High EN score). Defaulting EN. Scores: {scores}")
+            # Count exact word matches
+            hi_count = sum(1 for word in message_lower.split() if word in hindi_markers)
+            pa_count = sum(1 for word in message_lower.split() if word in punjabi_markers)
+            en_count = sum(1 for word in message_lower.split() if word in english_markers)
+
+            if hi_count > pa_count and hi_count > en_count:
+                return 'hi'
+            elif pa_count > hi_count and pa_count > en_count:
+                return 'pa'
+            elif en_count > 0:
                 return 'en'
-            self.logger.debug(f"Long message detected: {best_language}. Scores: {scores}")
+            else:
+                return 'en'  # Default for ambiguous short messages
+
+        keyword_scores = {'en': 0, 'hi': 0, 'pa': 0}
+
+        # English keywords with weights
+        english_words = {
+            'the': 2, 'is': 2, 'are': 2, 'do': 2, 'have': 2, 'my': 2, 'i': 2, 'you': 2,
+            'this': 1, 'that': 1, 'what': 1, 'how': 1, 'when': 1, 'where': 1, 'why': 1,
+            'fever': 1, 'headache': 1, 'pain': 1, 'doctor': 1, 'appointment': 1
+        }
+        for word, weight in english_words.items():
+            if word in message_lower.split():
+                keyword_scores['en'] += weight
+
+        # Hindi keywords with weights (Latin script)
+        hindi_words = {
+            'hai': 3, 'kya': 2, 'kaise': 2, 'kab': 2, 'kahan': 2, 'meri': 2, 'mera': 2,
+            'teri': 2, 'tera': 2, 'chahiye': 2, 'leni': 1, 'karna': 1, 'karne': 1,
+            'nahi': 2, 'bhi': 1, 'par': 1, 'aur': 1, 'bukhar': 1, 'dard': 1, 'khansi': 1
+        }
+        for word, weight in hindi_words.items():
+            if word in message_lower.split():
+                keyword_scores['hi'] += weight
+
+        # Punjabi keywords with weights (Latin script)
+        punjabi_words = {
+            'hai': 3, 'ki': 2, 'kive': 3, 'kado': 3, 'kithe': 3, 'meri': 2, 'mera': 2,
+            'teri': 2, 'tera': 2, 'chahidi': 3, 'leni': 1, 'karna': 1, 'karne': 1,
+            'nahin': 2, 'bhi': 1, 'par': 1, 'aur': 1, 'bukhar': 1, 'dukh': 2, 'khansi': 1
+        }
+        for word, weight in punjabi_words.items():
+            if word in message_lower.split():
+                keyword_scores['pa'] += weight
+
+        # Find language with highest score
+        best_language = max(keyword_scores, key=keyword_scores.get)
+        max_score = keyword_scores[best_language]
+
+        # Only return result if we have reasonable confidence
+        if max_score > 0:
             return best_language
         else:
-            self.logger.debug(f"Long message low confidence. Defaulting EN. Scores: {scores}")
-            return 'en' # Default to English if overall confidence is low
+            return 'en'  # Default fallback
 
     def _identify_user_needs(self, primary_intent: str) -> List[str]:
         """Identifies user needs based on intent."""
