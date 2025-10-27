@@ -1559,7 +1559,8 @@ def predict():
         else:
             history = []
         # Use primary_intent determined *after* state management for the context
-        context = {"user_intent": primary_intent, "context_history": history}
+        detected_language = nlu_understanding.get('language_detected', 'en')
+        context = {"user_intent": primary_intent, "context_history": history, "language": detected_language}
 
         action_payload = None
         if sehat_sahara_client and sehat_sahara_client.is_available:
@@ -1624,13 +1625,13 @@ def predict():
                     logger.error(f"Error processing AI response: {e}", exc_info=True)
                     action_payload = None
 
-        # --- Fallback Response Generation (No changes needed) ---
+        # --- Fallback Response Generation ---
         if not action_payload:
             logger.warning(f"AI failed or unavailable. Using local fallback for intent: {primary_intent}")
             action_payload = response_generator.generate_response(
                 user_message=user_message,
                 nlu_result=nlu_understanding,
-                user_context={'user_id': current_user.patient_id},
+                user_context={'user_id': current_user.patient_id, 'language': detected_language},
                 conversation_history=history
             )
             # Ensure fallback has necessary keys
@@ -1656,6 +1657,10 @@ def predict():
         if action_payload.get('action') == 'SHOW_MEDICINE_REMEDY':
             if hasattr(initialize_ai_components, '_conversation_memory'):
                 initialize_ai_components._conversation_memory.update_button_visibility(current_user.patient_id, 'medicine_recommendation')
+
+        # Update user's preferred language in memory
+        if hasattr(initialize_ai_components, '_conversation_memory'):
+            initialize_ai_components._conversation_memory.update_user_language(current_user.patient_id, detected_language)
 
         # Save conversation memory (No changes needed here)
         try:

@@ -32,7 +32,7 @@ class ProgressiveNLUProcessor:
         # It reads multiple keys separated by commas
         self.api_keys = [key.strip() for key in os.getenv('NLU_API_KEYS', '').split(',') if key.strip()]
         self.openrouter_base_url = "https://api.groq.com/openai/v1"
-        self.openrouter_model = "llama-3.1-8b-instant"
+        self.openrouter_model = "llama-3.3-70b-versatile"
 
         # Key rotation state
         self.current_key_index = 0
@@ -100,9 +100,18 @@ class ProgressiveNLUProcessor:
                     'appointment book karo', 'doctor mila deo', 'appointment de deo',
                     # Punjabi variations with English combinations
                     'doctor appointment book', 'appointment book punjabi', 'doctor nu milna book',
-                    'appointment chahida doctor', 'doctor nu dikhana appointment'
+                    'appointment chahida doctor', 'doctor nu dikhana appointment',
+                    # Bengali (Latin script) - expanded
+                    'doctor er sathe milte chai', 'appointment book korte chai', 'doctor ke dekhte chai',
+                    'doctor er kache jete chai', 'appointment chahiye', 'doctor er sathe kotha bolte chai',
+                    'appointment banao', 'appointment fix karo', 'doctor er sathe milo', 'doctor ke dekhao',
+                    'appointment karvao', 'doctor appointment chahiye', 'doctor er kache jao',
+                    'appointment book karo', 'doctor mila do', 'appointment de do',
+                    # Bengali variations with English combinations
+                    'doctor appointment book', 'appointment book bengali', 'doctor er sathe milte book',
+                    'appointment chahiye doctor', 'doctor ke dekhte appointment'
                 ],
-                'urgency_indicators': ['urgent', 'emergency', 'turant', 'jaldi', 'emergency hai', 'urgent hai']
+                'urgency_indicators': ['urgent', 'emergency', 'turant', 'jaldi', 'emergency hai', 'urgent hai', 'joldi', 'emergency ache']
             },
             'appointment_view': {
                 'keywords': [
@@ -226,7 +235,16 @@ class ProgressiveNLUProcessor:
                     'dawai da naam dasso', 'medicine scan karna hai', 'dawai vekhan hai',
                     # Punjabi variations with English combinations
                     'medicine scan punjabi', 'dawai scan english', 'medicine check karna',
-                    'dawai scan karo na', 'medicine scan chahida', 'dawai scan de deo'
+                    'dawai scan karo na', 'medicine scan chahida', 'dawai scan de deo',
+                    # Bengali (Latin script) - expanded
+                    'medicine scan karo', 'eta ki oshudh', 'medicine check karo',
+                    'oshudher naam', 'medicine identify karo', 'oshudh scan karo',
+                    'oshudh check karo', 'eta ki medicine', 'medicine scan korte chai',
+                    'oshudher scanning', 'medicine er pehchan', 'oshudh identify karo',
+                    'oshudher naam bolo', 'medicine scan karte chai', 'oshudh dekhte chai',
+                    # Bengali variations with English combinations
+                    'medicine scan bengali', 'oshudh scan english', 'medicine check karna',
+                    'oshudh scan karo na', 'medicine scan chahiye', 'oshudh scan de do'
                 ]
             },
             'emergency_assistance': {
@@ -1222,7 +1240,7 @@ Consider:
         return context
 
     def _detect_language(self, message: str) -> str:
-        """Improved language detection with better accuracy for mixed content."""
+        """Improved language detection with better accuracy for mixed content, including Bengali."""
         if not message or not message.strip():
             return 'en'
 
@@ -1232,34 +1250,41 @@ Consider:
         # Script-based detection (highest priority)
         script_hindi = bool(re.search(r'[\u0900-\u097F]', message))  # Devanagari script
         script_punjabi = bool(re.search(r'[\u0A00-\u0A7F]', message))  # Gurmukhi script
+        script_bengali = bool(re.search(r'[\u0980-\u09FF]', message))  # Bengali script
 
         if script_hindi:
             return 'hi'
         elif script_punjabi:
             return 'pa'
+        elif script_bengali:
+            return 'bn'
 
         word_count = len(message.split())
         if word_count <= 3:
             # Check for definitive language markers
             hindi_markers = ['hai', 'kya', 'nahi', 'chahiye', 'karna', 'mera', 'meri', 'tera', 'teri']
             punjabi_markers = ['hai', 'ki', 'nahin', 'chahidi', 'karna', 'mera', 'meri', 'tera', 'teri', 'kado', 'kithe', 'kive']
+            bengali_markers = ['ami', 'tumi', 'ache', 'na', 'chahiye', 'karbo', 'amar', 'tomar', 'kobe', 'kothay', 'kemon']
             english_markers = ['the', 'is', 'are', 'do', 'have', 'my', 'i', 'you', 'this', 'that', 'what', 'how', 'when', 'where', 'why']
 
             # Count exact word matches
             hi_count = sum(1 for word in message_lower.split() if word in hindi_markers)
             pa_count = sum(1 for word in message_lower.split() if word in punjabi_markers)
+            bn_count = sum(1 for word in message_lower.split() if word in bengali_markers)
             en_count = sum(1 for word in message_lower.split() if word in english_markers)
 
-            if hi_count > pa_count and hi_count > en_count:
+            if hi_count > pa_count and hi_count > bn_count and hi_count > en_count:
                 return 'hi'
-            elif pa_count > hi_count and pa_count > en_count:
+            elif pa_count > hi_count and pa_count > bn_count and pa_count > en_count:
                 return 'pa'
+            elif bn_count > hi_count and bn_count > pa_count and bn_count > en_count:
+                return 'bn'
             elif en_count > 0:
                 return 'en'
             else:
                 return 'en'  # Default for ambiguous short messages
 
-        keyword_scores = {'en': 0, 'hi': 0, 'pa': 0}
+        keyword_scores = {'en': 0, 'hi': 0, 'pa': 0, 'bn': 0}
 
         # English keywords with weights
         english_words = {
@@ -1290,6 +1315,16 @@ Consider:
         for word, weight in punjabi_words.items():
             if word in message_lower.split():
                 keyword_scores['pa'] += weight
+
+        # Bengali keywords with weights (Latin script)
+        bengali_words = {
+            'ami': 3, 'tumi': 3, 'ache': 3, 'na': 2, 'chahiye': 2, 'karbo': 2, 'amar': 2, 'tomar': 2,
+            'kobe': 2, 'kothay': 2, 'kemon': 2, 'bhalo': 1, 'khoarap': 1, 'daktar': 1, 'appointment': 1,
+            'bukhar': 1, 'dard': 1, 'khansi': 1, 'medicine': 1, 'doctor': 1
+        }
+        for word, weight in bengali_words.items():
+            if word in message_lower.split():
+                keyword_scores['bn'] += weight
 
         # Find language with highest score
         best_language = max(keyword_scores, key=keyword_scores.get)

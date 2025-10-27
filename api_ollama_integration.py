@@ -13,7 +13,7 @@ import re
 class ApiClient:
     """Enhanced client for interacting with API-based LLM service with rotating API keys."""
     
-    def __init__(self, api_keys: List[str] = None, base_url: str = "https://api.groq.com/openai/v1", model: str = "llama-3.1-8b-instant"):
+    def __init__(self, api_keys: List[str] = None, base_url: str = "https://api.groq.com/openai/v1", model: str = "llama-3.3-70b-versatile"):
         # --- MODIFICATION START ---
         self.api_keys = api_keys or [key.strip() for key in os.getenv('GROQ_API_KEYS', '').split(',') if key.strip()]
         self.base_url = base_url
@@ -282,7 +282,7 @@ class GroqScoutClient:
 class SehatSaharaApiClient:
     """Enhanced mental health specific client using API service"""
 
-    def __init__(self, model: str = "llama-3.1-8b-instant", api_key: str = None, base_url: str = "https://api.groq.com/openai/v1"):
+    def __init__(self, model: str = "llama-3.3-70b-versatile", api_key: str = None, base_url: str = "https://api.groq.com/openai/v1"):
         # --- THIS IS THE FIX ---
         # Pass the api_key as a list to the 'api_keys' argument
         self.client = ApiClient(api_keys=[api_key] if api_key else None, base_url=base_url, model=model)
@@ -383,7 +383,7 @@ Sehat Sahara: [Your response here]"""
     
     def get_temperature_for_language(self, language: str) -> float:
         """Get appropriate temperature based on language"""
-        if language in ["pa", "hi"]:
+        if language in ["pa", "hi", "bn"]:
             return 0.5  # Moderate temperature for local languages
         else:
             return 0.7  # Higher temperature for English
@@ -393,6 +393,7 @@ Sehat Sahara: [Your response here]"""
         language_tokens = {
             "pa": 300,  # Punjabi
             "hi": 300,  # Hindi
+            "bn": 300,  # Bengali
             "en": 350   # English
         }
         return language_tokens.get(language, 300)
@@ -584,6 +585,7 @@ EMOTIONAL_STATE: {emotional_state}
 URGENCY_LEVEL: {urgency_level}
 LANGUAGE: {language}
 GUIDANCE: {intent_guidance.get(intent, "Provide general navigation help for the app.")}
+IMPORTANT: Respond entirely in the specified language ({language}). For Hindi (hi), use Devanagari script if appropriate. For Bengali (bn), use Bengali script if appropriate. Do not mix languages.
 """
 
         return f"{self.base_system_prompt}\n{context_block}\nRemember: Output ONLY a single valid JSON object."
@@ -597,7 +599,7 @@ Analyze the user's message for the Sehat Sahara health app and return ONLY a JSO
 
 {{
   "primary_intent": "one of: appointment_booking, appointment_view, appointment_cancel, health_record_request, symptom_triage, find_medicine, prescription_inquiry, prescription_upload, medicine_scan, emergency_assistance, report_issue, post_appointment_followup, prescription_summary_request, general_inquiry, out_of_scope, set_medicine_reminder",
-  "language_detected": "pa | hi | en",
+  "language_detected": "pa | hi | en | bn",
   "urgency_level": "low | medium | high | emergency",
   "confidence": 0.0 to 1.0,
   "context_entities": {{"record_type":"all|labs|prescriptions|imaging", "specialty":"e.g., general_physician|pediatrician", "...": "..."}}
