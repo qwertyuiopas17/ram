@@ -32,7 +32,7 @@ class ProgressiveNLUProcessor:
         # It reads multiple keys separated by commas
         self.api_keys = [key.strip() for key in os.getenv('NLU_API_KEYS', '').split(',') if key.strip()]
         self.openrouter_base_url = "https://api.groq.com/openai/v1"
-        self.openrouter_model = "llama-3.3-70b-versatile"
+        self.openrouter_model = "llama-3.1-8b-instant"
 
         # Key rotation state
         self.current_key_index = 0

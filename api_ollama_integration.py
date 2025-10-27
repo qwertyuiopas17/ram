@@ -13,7 +13,7 @@ import re
 class ApiClient:
     """Enhanced client for interacting with API-based LLM service with rotating API keys."""
     
-    def __init__(self, api_keys: List[str] = None, base_url: str = "https://api.groq.com/openai/v1", model: str = "llama-3.3-70b-versatile"):
+    def __init__(self, api_keys: List[str] = None, base_url: str = "https://api.groq.com/openai/v1", model: str = "llama-3.1-8b-instant"):
         # --- MODIFICATION START ---
         self.api_keys = api_keys or [key.strip() for key in os.getenv('GROQ_API_KEYS', '').split(',') if key.strip()]
         self.base_url = base_url
@@ -282,7 +282,7 @@ class GroqScoutClient:
 class SehatSaharaApiClient:
     """Enhanced mental health specific client using API service"""
 
-    def __init__(self, model: str = "llama-3.3-70b-versatile", api_key: str = None, base_url: str = "https://api.groq.com/openai/v1"):
+    def __init__(self, model: str = "llama-3.1-8b-instant", api_key: str = None, base_url: str = "https://api.groq.com/openai/v1"):
         # --- THIS IS THE FIX ---
         # Pass the api_key as a list to the 'api_keys' argument
         self.client = ApiClient(api_keys=[api_key] if api_key else None, base_url=base_url, model=model)
