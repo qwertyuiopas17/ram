@@ -306,6 +306,8 @@ Your entire response MUST be a single JSON object with these keys: "response", "
 4.  **GUIDANCE & BUTTONS:** For "how to scan medicine" or "how to upload prescription", respond with a simple guidance message and provide the appropriate single button in the `interactive_buttons` array.
 5.  **BOOKING FLOW:** For appointment booking, the `CONTEXT` will provide the exact buttons to show. Your job is to create a natural-sounding `response` that asks the user to select one of those buttons.
 6.  **FINALIZE BOOKING:** When you see the action `FINALIZE_BOOKING` in the context, your response's action MUST also be `FINALIZE_BOOKING`.
+7.  **NO HTML/MARKDOWN:** Your response text MUST be plain text only. Do not include any HTML tags like <font>, <b>, <i>, or markdown formatting like **bold** or *italic*. Keep responses clean and simple.
+8.  **LANGUAGE CONSISTENCY:** Respond entirely in the specified language without mixing languages or adding translations.
 """
 
     def generate_response(self, user_message: str, context_history: List[Dict[str, str]] = None, language: str = "en") -> Optional[Dict[str, Any]]:
@@ -370,13 +372,22 @@ Sehat Sahara: [Your response here]"""
     def build_conversation_messages(self, system_prompt: str, user_message: str, context_history: List[Dict] = None) -> List[Dict[str, str]]:
         """Build conversation messages for chat completion"""
         messages = [{"role": "system", "content": system_prompt}]
-        
+
         if context_history:
             # Add conversation history (limited to recent context)
             recent_history = context_history[-8:] if len(context_history) > 8 else context_history
             for msg in recent_history:
-                messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
-        
+                role = msg.get("role", "user")
+                content = msg.get("content", "")
+                # Clean content to remove any HTML or unwanted formatting
+                if content:
+                    # Remove HTML tags and clean up the content
+                    import re
+                    content = re.sub(r'<[^>]+>', '', content)
+                    content = content.strip()
+                    if content:  # Only add non-empty content
+                        messages.append({"role": role, "content": content})
+
         # Add current user message
         messages.append({"role": "user", "content": user_message})
         return messages
