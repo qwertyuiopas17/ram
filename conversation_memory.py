@@ -180,13 +180,6 @@ class ProgressiveConversationMemory:
     # Always return the existing or newly created profile
         return self.user_profiles[user_id]
     
-    def update_user_language(self, user_id: str, language: str) -> None:
-        """Update user's preferred language based on detected language"""
-        profile = self.create_or_get_user(user_id)
-        if profile.preferred_language != language:
-            profile.preferred_language = language
-            self.logger.info(f"Updated preferred language for user {user_id} to {language}")
-    
     def add_conversation_turn(self,
                              user_id: str,
                              user_message: str,
@@ -468,7 +461,7 @@ class ProgressiveConversationMemory:
             'total_tasks_completed': total_tasks_completed,
             'active_sessions': len(self.session_contexts),
             'conversation_stats': dict(self.conversation_stats),
-            'supported_languages': ['hi', 'pa', 'en', 'bn']
+            'supported_languages': ['hi', 'pa', 'en']
         }
     
     def export_user_data(self, user_id: str) -> Dict[str, Any]:

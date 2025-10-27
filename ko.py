@@ -48,15 +48,6 @@ class ProgressiveResponseGenerator:
                     ],
                     'action': 'NAVIGATE_TO_APPOINTMENT_BOOKING',
                     'parameters': {}
-                },
-                'bn': {
-                    'responses': [
-                        "Ami apnake doctor er sathe appointment book korte madad korte pari. Apni kon doctor er sathe milte chan?",
-                        "Appointment book korte ami apnar madad karbo. Ki apni bolte paren kon prakar er doctor chahiye?",
-                        "Chalo appointment book kori. Ami apnake doctor selection page e niye jabo."
-                    ],
-                    'action': 'NAVIGATE_TO_APPOINTMENT_BOOKING',
-                    'parameters': {}
                 }
             },
             'appointment_view': {
@@ -173,16 +164,6 @@ class ProgressiveResponseGenerator:
                         "Tuhade symptoms de baare mein dhanyavaad. Behtar samajhan layi kuch sawal: Yeh kado shuru hua? Kitni takleef hai 1 ton 10 tak? Ki aur koi symptoms hain jaise bukhar, sir dukh, ya ulti? Yeh information doctor ko milan vich madad karegi.",
                         "Mujhe dukh hai ki tusi theek nahi lag rahe. Thoda aur dassiye: Yeh kinne dino se ho raha hai? Badhta ja raha hai, same hai, ya kam ho raha hai? Ki bukhar, sir dukh, ya ulti bhi ho rahi hai? Main general guidance de sakdi haan par doctor naal zaroor milo.",
                         "Tuhadi takleef ko behtar samajhan layi: Yeh kado shuru hua tha? Yeh badh raha hai ya kam? Ki aur symptoms hain? Yeh madad karegi ki main tuhanu sahi direction de sakun, par yaad rakhna main doctor nahi haan."
-                    ],
-                    'action': 'CONTINUE_CONVERSATION',
-                    'parameters': {'reason': 'symptom_assessment', 'next_action': 'ask_followup_questions'}
-                },
-                'bn': {
-                    'responses': [
-                        "Ami bujhte parchi je apnar takleef ache. Sahi madad korte amar aro jante hobe. Bolun: Eta kobe theke hochi? Eta lagatar hoy na kabhi kabhi? Mone rakhben, ami doctor noi - sudhu general guidance dite pari ar doctor er sathe milte madad korte pari.",
-                        "Apnar symptoms er baare dhanyabad. Behtar bujhte kichu sawal: Eta kobe shuru hoyechilo? Kitna takleef 1 theke 10? Ki aro kono symptoms jaise bukhar, matha dukho, ba ulti? Eta doctor er sathe milte madad korbe.",
-                        "Dukho ache je apni bhalo lagchen na. Aaro bolun: Eta koto din dhore hochi? Badhte ja chi, same ache, na komche? Ki bukhar, matha dukho, ba ulti o hochi? Ami general guidance dite pari kintu doctor er sathe milun.",
-                        "Apnar takleef behtar bujhte: Eta kobe shuru hoyechilo? Eta badhche na komche? Ki aro symptoms ache? Eta madad korbe je ami apnake sahi direction dite pari, kintu mone rakhben ami doctor noi."
                     ],
                     'action': 'CONTINUE_CONVERSATION',
                     'parameters': {'reason': 'symptom_assessment', 'next_action': 'ask_followup_questions'}
@@ -357,15 +338,6 @@ class ProgressiveResponseGenerator:
                         "Main Sehat Sahara app navigate karan vich tuhadi madad layi haan. Appointment book karna, medicine labhna, health records check karna - sab vich madad kar sakdi haan.",
                         "Sehat Sahara vich tuhada swagat hai! Main appointments, health records, pharmacy labhne, te emergency help vich madad kar sakdi haan.",
                         "Main tuhadi health assistant haan. Doctor appointments, medicine di jankari, symptom checking, te app navigation vich madad kar sakdi haan."
-                    ],
-                    'action': 'SHOW_APP_FEATURES',
-                    'parameters': {}
-                },
-                'bn': {
-                    'responses': [
-                        "Ami Sehat Sahara app navigate korte apnar madad korbo. Appointment book kora, medicine khujna, health records check kora - sob e madad korte pari.",
-                        "Sehat Sahara e apnar swagat! Ami appointments, health records, pharmacy khujna, ar emergency help e madad korte pari.",
-                        "Ami apnar health assistant. Doctor appointments, medicine er jankari, symptom checking, ar app navigation e madad korte pari."
                     ],
                     'action': 'SHOW_APP_FEATURES',
                     'parameters': {}
@@ -594,20 +566,6 @@ class ProgressiveResponseGenerator:
             else:
                 summary_parts.append("ਕੋਈ ਦਵਾਈ ਨਹੀਂ ਦੱਸੀ ਗਈ।")
         
-        elif language == 'bn':
-            summary_parts.append(f"এটি ডাক্তার {doctor_name} দ্বারা দেওয়া আপনার প্রেসক্রিপশন।")
-            if diagnosis:
-                summary_parts.append(f"নিদান: {diagnosis}")
-            if medications:
-                summary_parts.append("\nওষুধ:")
-                for med in medications:
-                    name = med.get('name', 'N/A')
-                    dosage = med.get('dosage', 'নির্দেশ অনুসারে')
-                    time = med.get('time', '')
-                    summary_parts.append(f"- {name}: {dosage} ({time})")
-            else:
-                summary_parts.append("কোনো ওষুধ বলা হয়নি।")
-        
         else: # Default to English
             summary_parts.append(f"Here is your prescription summary from {doctor_name}.")
             if diagnosis:
@@ -750,7 +708,7 @@ class ProgressiveResponseGenerator:
 
     def get_supported_languages(self) -> List[str]:
         """Get list of supported languages."""
-        return ['en', 'hi', 'pa', 'bn']
+        return ['en', 'hi', 'pa']
 
     def get_supported_actions(self) -> List[str]:
         """Get list of all supported actions."""

@@ -25,39 +25,30 @@ def clean_ai_response(text: str) -> str:
     """Enhanced response cleaning that preserves JSON structure while removing artifacts"""
     if not isinstance(text, str):
         return text
-
+    
     # Remove common AI artifacts
     cleaned_text = text.replace('\\n', '\n').replace("SAHARA:", "").strip()
-
+    
     # Try to detect if this is JSON - if so, don't filter lines
     try:
         json.loads(cleaned_text)
         return cleaned_text  # It's valid JSON, return as-is
     except json.JSONDecodeError:
         pass
-
-    # Remove HTML tags completely
-    import re
-    cleaned_text = re.sub(r'<[^>]+>', '', cleaned_text)  # Remove all HTML tags
-    cleaned_text = re.sub(r'</[^>]+>', '', cleaned_text)  # Remove closing tags too
-
+    
     # For non-JSON text, filter instructional phrases
     instructional_phrases = [
         "your task is to", "your response must be only", "return only json",
-        "you are an ai", "as an ai assistant", "i cannot", "i apologize",
-        "font color", "green", "blue", "red"  # Remove color references
+        "you are an ai", "as an ai assistant", "i cannot", "i apologize"
     ]
     lines = cleaned_text.splitlines()
     filtered = [ln for ln in lines if not any(p in ln.lower() for p in instructional_phrases)]
     result = "\n".join(filtered).strip()
-
+    
     # Remove leading/trailing quotes if present
     if result.startswith('"') and result.endswith('"'):
         result = result[1:-1]
-
-    # Remove any remaining HTML entities or formatting
-    result = re.sub(r'&[a-zA-Z0-9#]+;', '', result)  # Remove HTML entities
-
+    
     return result
 # Import enhanced database models
 from enhanced_database_models import (
@@ -188,12 +179,10 @@ VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY")
 VAPID_CLAIM_EMAIL = "dedpull2005@outlook.com"
 
 if not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY:
-    logger.warning("WARNING: VAPID_PRIVATE_KEY and VAPID_PUBLIC_KEY are not set in the environment.")
-    logger.warning("Push notifications will not work. For production, generate keys using a VAPID key generator.")
-    # For development/testing, use dummy keys
-    VAPID_PRIVATE_KEY = "dummy_private_key_for_development"
-    VAPID_PUBLIC_KEY = "dummy_public_key_for_development"
-    logger.info("Using dummy VAPID keys for development. Push notifications disabled.")
+    logger.critical("FATAL ERROR: VAPID_PRIVATE_KEY and VAPID_PUBLIC_KEY are not set in the environment.")
+    logger.critical("Please generate keys using a VAPID key generator and add them to your Render Environment Variables.")
+    # Exit the application if keys are not found, as push notifications cannot work.
+    exit("VAPID keys are not configured. Application cannot start.")
 
 # --- BACKGROUND SCHEDULER FOR SENDING NOTIFICATIONS ---
 scheduler = BackgroundScheduler(daemon=True)
@@ -562,33 +551,17 @@ def get_current_user():
         elif role == 'pharmacy':
             pharmacy_id_str = session.get('pharmacy_id')
             return Pharmacy.query.filter_by(pharmacy_id=pharmacy_id_str, is_active=True).first()
-
+        
         elif role in ['patient', 'saathi', 'admin']:
             user = User.query.filter_by(id=user_pk_id, is_active=True).first()
             if user and user.role == role:
                 return user
-
+        
         return None
-
+        
     except Exception as e:
         logger.error(f"Unexpected error in get_current_user: {e}")
         return None
-
-def get_user_language(user_id_str=None, user_obj=None):
-    """Helper function to get user's preferred language"""
-    try:
-        if user_obj:
-            return user_obj.preferred_language or 'en'
-
-        if user_id_str:
-            user = User.query.filter_by(patient_id=user_id_str, is_active=True).first()
-            if user:
-                return user.preferred_language or 'en'
-
-        return 'en'  # default fallback
-    except Exception as e:
-        logger.error(f"Error getting user language: {e}")
-        return 'en'
 
 def admin_required(f):
     @wraps(f)
@@ -864,20 +837,7 @@ def get_user_progress():
         user_id = data.get("userId", "").strip()
 
         if not user_id:
-            # Get user's preferred language
-            detected_language = get_user_language(user_id)
-
-            # Translate error message based on language
-            if detected_language == 'hi':
-                error_message = "userId required है।"
-            elif detected_language == 'pa':
-                error_message = "userId required ਹੈ।"
-            elif detected_language == 'bn':
-                error_message = "userId required।"
-            else:
-                error_message = "userId is required"
-
-            return jsonify({"error": error_message}), 400
+            return jsonify({"error": "userId is required"}), 400
 
         # Get progress summary from conversation memory
         if hasattr(initialize_ai_components, '_conversation_memory'):
@@ -896,20 +856,7 @@ def get_user_progress():
 
     except Exception as e:
         logger.error(f"Get user progress error: {e}")
-        # Get user's preferred language
-        detected_language = get_user_language(user_id)
-
-        # Translate error message based on language
-        if detected_language == 'hi':
-            error_message = "User progress get करने में failed।"
-        elif detected_language == 'pa':
-            error_message = "User progress get ਕਰਨ ਵਿੱਚ failed।"
-        elif detected_language == 'bn':
-            error_message = "User progress get করতে failed।"
-        else:
-            error_message = "Failed to get user progress"
-
-        return jsonify({"error": error_message}), 500
+        return jsonify({"error": "Failed to get user progress"}), 500
 
 @app.route("/v1/post-appointment-feedback", methods=["POST"])
 def handle_post_appointment_feedback():
@@ -923,20 +870,7 @@ def handle_post_appointment_feedback():
         language = data.get("language", "en")
 
         if not user_id:
-            # Get user's preferred language
-            detected_language = get_user_language(user_id)
-
-            # Translate error message based on language
-            if detected_language == 'hi':
-                error_message = "userId required है।"
-            elif detected_language == 'pa':
-                error_message = "userId required ਹੈ।"
-            elif detected_language == 'bn':
-                error_message = "userId required।"
-            else:
-                error_message = "userId is required"
-
-            return jsonify({"error": error_message}), 400
+            return jsonify({"error": "userId is required"}), 400
 
         # Get conversation history for context
         if hasattr(initialize_ai_components, '_conversation_memory'):
@@ -1011,20 +945,7 @@ def handle_post_appointment_feedback():
 
     except Exception as e:
         logger.error(f"Post-appointment feedback error: {e}")
-        # Get user's preferred language
-        detected_language = get_user_language(user_id)
-
-        # Translate error message based on language
-        if detected_language == 'hi':
-            error_message = "Feedback process करने में failed।"
-        elif detected_language == 'pa':
-            error_message = "Feedback process ਕਰਨ ਵਿੱਚ failed।"
-        elif detected_language == 'bn':
-            error_message = "Feedback process করতে failed।"
-        else:
-            error_message = "Failed to process feedback"
-
-        return jsonify({"error": error_message}), 500
+        return jsonify({"error": "Failed to process feedback"}), 500
     
 @app.route("/v1/vapid-public-key", methods=["GET"])
 def get_vapid_public_key():
@@ -1083,20 +1004,7 @@ def manage_medicine_reminders():
         action = data.get("action", "get").strip().lower()
 
         if not user_id:
-            # Get user's preferred language
-            detected_language = get_user_language(user_id)
-
-            # Translate error message based on language
-            if detected_language == 'hi':
-                error_message = "userId required है।"
-            elif detected_language == 'pa':
-                error_message = "userId required ਹੈ।"
-            elif detected_language == 'bn':
-                error_message = "userId required।"
-            else:
-                error_message = "userId is required"
-
-            return jsonify({"error": error_message}), 400
+            return jsonify({"error": "userId is required"}), 400
 
         if action == "get":
             reminders = conversation_memory.get_medicine_reminders(user_id)
@@ -1154,20 +1062,7 @@ def manage_medicine_reminders():
 
     except Exception as e:
         logger.error(f"Medicine reminders error: {e}", exc_info=True)
-        # Get user's preferred language
-        detected_language = get_user_language(user_id)
-
-        # Translate error message based on language
-        if detected_language == 'hi':
-            error_message = "Medicine reminders manage करने में failed।"
-        elif detected_language == 'pa':
-            error_message = "Medicine reminders manage ਕਰਨ ਵਿੱਚ failed।"
-        elif detected_language == 'bn':
-            error_message = "Medicine reminders manage করতে failed।"
-        else:
-            error_message = "Failed to manage medicine reminders"
-
-        return jsonify({"error": error_message}), 500
+        return jsonify({"error": "Failed to manage medicine reminders"}), 500
 
 @app.route("/v1/enhanced-sos", methods=["POST"])
 def handle_enhanced_sos():
@@ -1181,20 +1076,7 @@ def handle_enhanced_sos():
         language = data.get("language", "en")
         
         if not user_id or not message:
-            # Get user's preferred language
-            detected_language = get_user_language(user_id)
-
-            # Translate error message based on language
-            if detected_language == 'hi':
-                error_message = "userId और message required हैं।"
-            elif detected_language == 'pa':
-                error_message = "userId ਅਤੇ message required ਹਨ।"
-            elif detected_language == 'bn':
-                error_message = "userId এবং message required।"
-            else:
-                error_message = "userId and message are required"
-
-            return jsonify({"error": error_message}), 400
+            return jsonify({"error": "userId and message are required"}), 400
         
         # Enhanced emergency keyword detection
         emergency_keywords = {
@@ -1269,20 +1151,7 @@ def handle_enhanced_sos():
 
     except Exception as e:
         logger.error(f"Enhanced SOS detection error: {e}")
-        # Get user's preferred language
-        detected_language = get_user_language(user_id)
-
-        # Translate error message based on language
-        if detected_language == 'hi':
-            error_message = "Emergency detection process करने में failed।"
-        elif detected_language == 'pa':
-            error_message = "Emergency detection process ਕਰਨ ਵਿੱਚ failed।"
-        elif detected_language == 'bn':
-            error_message = "Emergency detection process করতে failed।"
-        else:
-            error_message = "Failed to process emergency detection"
-
-        return jsonify({"error": error_message}), 500
+        return jsonify({"error": "Failed to process emergency detection"}), 500
 
 @app.route("/v1/test-prescription", methods=["GET"])
 def test_prescription_endpoint():
@@ -1312,20 +1181,7 @@ def get_prescription_summary():
 
         if not user_id:
             logger.error("Prescription summary: userId is required")
-            # Get user's preferred language
-            detected_language = get_user_language(user_id)
-
-            # Translate error message based on language
-            if detected_language == 'hi':
-                error_message = "userId required है।"
-            elif detected_language == 'pa':
-                error_message = "userId required ਹੈ।"
-            elif detected_language == 'bn':
-                error_message = "userId required।"
-            else:
-                error_message = "userId is required"
-
-            return jsonify({"error": error_message}), 400
+            return jsonify({"error": "userId is required"}), 400
 
         # Get prescription summary from conversation memory
         if hasattr(initialize_ai_components, '_conversation_memory'):
@@ -1337,39 +1193,18 @@ def get_prescription_summary():
 
         if not prescription_data:
             logger.warning(f"No prescription found for user {user_id}")
-            # Get user's preferred language
-            detected_language = get_user_language(user_id)
-
-            # Translate error message based on language
-            if detected_language == 'hi':
-                error_message = "इस user के लिए कोई prescription नहीं मिली।"
-            elif detected_language == 'pa':
-                error_message = "ਇਸ user ਲਈ ਕੋਈ prescription ਨਹੀਂ ਮਿਲੀ।"
-            elif detected_language == 'bn':
-                error_message = "এই user এর জন্য কোনো prescription পাওয়া যায়নি।"
-            else:
-                error_message = "No prescription found for this user"
-
             return jsonify({
                 "success": False,
-                "message": error_message
+                "message": "No prescription found for this user"
             }), 404
 
         # Generate summary response using response generator
         if response_generator:
             summary_response = response_generator.generate_prescription_summary_response(
-                prescription_data, detected_language  # Use detected language for prescription display
+                prescription_data, 'en'  # Default to English for prescription display
             )
         else:
-            # Translate fallback message based on language
-            if detected_language == 'hi':
-                summary_response = "Prescription summary उपलब्ध नहीं है।"
-            elif detected_language == 'pa':
-                summary_response = "Prescription summary ਉਪਲਬਧ ਨਹੀਂ ਹੈ।"
-            elif detected_language == 'bn':
-                summary_response = "Prescription summary উপলব্ধ নেই।"
-            else:
-                summary_response = "Prescription summary not available."
+            summary_response = "Prescription summary not available."
 
         logger.info(f"Prescription summary generated successfully for user {user_id}")
         return jsonify({
@@ -1381,20 +1216,7 @@ def get_prescription_summary():
     except Exception as e:
         logger.error(f"Prescription summary error: {e}")
         logger.error(traceback.format_exc())
-        # Get user's preferred language
-        detected_language = get_user_language(user_id)
-
-        # Translate error message based on language
-        if detected_language == 'hi':
-            error_message = "Prescription summary get करने में failed।"
-        elif detected_language == 'pa':
-            error_message = "Prescription summary get ਕਰਨ ਵਿੱਚ failed।"
-        elif detected_language == 'bn':
-            error_message = "Prescription summary get করতে failed।"
-        else:
-            error_message = "Failed to get prescription summary"
-
-        return jsonify({"error": error_message}), 500
+        return jsonify({"error": "Failed to get prescription summary"}), 500
 
 
 def _get_or_create_booking_context(user_id: str) -> Dict[str, Any]:
@@ -1505,13 +1327,6 @@ def predict():
         if not current_user:
             return jsonify({"error": "User not found.", "login_required": True}), 401
 
-        # Get NLU understanding first
-        nlu_understanding = nlu_processor.understand_user_intent(user_message, sehat_sahara_mode=True)
-        primary_intent = nlu_understanding.get('primary_intent', 'general_inquiry')
-
-        # Get user's preferred language from NLU understanding
-        detected_language = nlu_understanding.get('language_detected', 'en')
-
         # --- START: MODIFIED STATE MANAGEMENT LOGIC ---
 
         # Get current task from conversation memory
@@ -1520,6 +1335,9 @@ def predict():
             task_in_progress = current_task_from_memory.get('task') if current_task_from_memory else None
         else:
             task_in_progress = None
+
+        nlu_understanding = nlu_processor.understand_user_intent(user_message, sehat_sahara_mode=True)
+        primary_intent = nlu_understanding.get('primary_intent', 'general_inquiry')
 
         # FLEXIBLE STATE MANAGEMENT: Check if the user's new intent is unrelated to the current task.
         related_booking_intents = ['appointment_booking', 'SELECT_SPECIALTY', 'SELECT_DOCTOR', 'SELECT_DATE', 'SELECT_TIME', 'SELECT_MODE']
@@ -1567,52 +1385,8 @@ def predict():
                 booking_context.clear() # Clear old context
                 booking_context['last_step'] = 'ask_specialty'
                 available_specialties = _get_available_specialties_from_db()
-                # Translate specialty buttons based on language (same as above)
-                if detected_language == 'hi':
-                    specialty_translations = {
-                        "General Physician": "जनरल फिजिशियन",
-                        "Dermatologist": "त्वचा विशेषज्ञ",
-                        "Child Specialist": "बाल विशेषज्ञ",
-                        "Cardiologist": "हृदय विशेषज्ञ",
-                        "Gynecologist": "स्त्री रोग विशेषज्ञ",
-                        "Orthopedic": "हड्डी विशेषज्ञ",
-                        "Neurologist": "न्यूरोलॉजिस्ट"
-                    }
-                    translated_specialties = [specialty_translations.get(s, s) for s in available_specialties]
-                elif detected_language == 'pa':
-                    specialty_translations = {
-                        "General Physician": "ਜਨਰਲ ਫਿਜ਼ੀਸ਼ੀਅਨ",
-                        "Dermatologist": "ਚਮੜੀ ਵਿਸ਼ੇਸ਼ਜ",
-                        "Child Specialist": "ਬੱਚੇ ਵਿਸ਼ੇਸ਼ਜ",
-                        "Cardiologist": "ਦਿਲ ਵਿਸ਼ੇਸ਼ਜ",
-                        "Gynecologist": "ਔਰਤ ਰੋਗ ਵਿਸ਼ੇਸ਼ਜ",
-                        "Orthopedic": "ਹੱਡੀ ਵਿਸ਼ੇਸ਼ਜ",
-                        "Neurologist": "ਨਿਊਰੋਲੋਜਿਸਟ"
-                    }
-                    translated_specialties = [specialty_translations.get(s, s) for s in available_specialties]
-                elif detected_language == 'bn':
-                    specialty_translations = {
-                        "General Physician": "জেনারেল ফিজিশিয়ান",
-                        "Dermatologist": "চর্ম বিশেষজ্ঞ",
-                        "Child Specialist": "শিশু বিশেষজ্ঞ",
-                        "Cardiologist": "হৃদয় বিশেষজ্ঞ",
-                        "Gynecologist": "স্ত্রী রোগ বিশেষজ্ঞ",
-                        "Orthopedic": "হাড় বিশেষজ্ঞ",
-                        "Neurologist": "নিউরোলজিস্ট"
-                    }
-                    translated_specialties = [specialty_translations.get(s, s) for s in available_specialties]
-                else:
-                    translated_specialties = available_specialties
-                specialty_buttons = ', '.join([f'{{"text": "{s}", "action": "SELECT_SPECIALTY", "parameters": {{"specialty": "{available_specialties[i]}"}}}}' for i, s in enumerate(translated_specialties)])
-                # Translate restart booking message based on language
-                if detected_language == 'hi':
-                    ai_message_override = f"CONTEXT: User booking restart करना चाहता है। उनसे specialty select करने को कहें using these buttons: [{specialty_buttons}]"
-                elif detected_language == 'pa':
-                    ai_message_override = f"CONTEXT: User booking restart ਕਰਨਾ ਚਾਹੁੰਦਾ ਹੈ। ਉਹਨਾਂ ਨੂੰ specialty select ਕਰਨ ਨੂੰ ਕਹੋ using these buttons: [{specialty_buttons}]"
-                elif detected_language == 'bn':
-                    ai_message_override = f"CONTEXT: User booking restart করতে চান। তাদের specialty select করার জন্য বলুন using these buttons: [{specialty_buttons}]"
-                else:
-                    ai_message_override = f"CONTEXT: User wants to restart booking. Ask them to select a specialty using these buttons: [{specialty_buttons}]"
+                specialty_buttons = ', '.join([f'{{"text": "{s}", "action": "SELECT_SPECIALTY", "parameters": {{"specialty": "{s}"}}}}' for s in available_specialties])
+                ai_message_override = f"CONTEXT: User wants to restart booking. Ask them to select a specialty using these buttons: [{specialty_buttons}]"
                 if hasattr(initialize_ai_components, '_conversation_memory'):
                     initialize_ai_components._conversation_memory.set_current_task(current_user.patient_id, 'appointment_booking', booking_context)
                 # Skip the rest of the old booking logic for this turn
@@ -1631,34 +1405,10 @@ def predict():
                     if doctors:
                         booking_context['specialty'] = selected_specialty
                         booking_context['last_step'] = 'ask_doctor'
-                        # Generate buttons in the detected language
-                        if detected_language == 'hi':
-                            doctor_buttons = ', '.join([f'{{"text": "डॉ. {doc.full_name}", "action": "SELECT_DOCTOR", "parameters": {{"doctor_id": "{doc.doctor_id}"}}}}' for doc in doctors[:5]])
-                        elif detected_language == 'pa':
-                            doctor_buttons = ', '.join([f'{{"text": "ਡਾ. {doc.full_name}", "action": "SELECT_DOCTOR", "parameters": {{"doctor_id": "{doc.doctor_id}"}}}}' for doc in doctors[:5]])
-                        elif detected_language == 'bn':
-                            doctor_buttons = ', '.join([f'{{"text": "ডা. {doc.full_name}", "action": "SELECT_DOCTOR", "parameters": {{"doctor_id": "{doc.doctor_id}"}}}}' for doc in doctors[:5]])
-                        else:
-                            doctor_buttons = ', '.join([f'{{"text": "Dr. {doc.full_name}", "action": "SELECT_DOCTOR", "parameters": {{"doctor_id": "{doc.doctor_id}"}}}}' for doc in doctors[:5]])
-                        # Translate doctor selection message based on language
-                        if detected_language == 'hi':
-                            ai_message_override = f"CONTEXT: User ने '{selected_specialty}' चुना। उनसे doctor choose करने को कहें using these buttons: [{doctor_buttons}]"
-                        elif detected_language == 'pa':
-                            ai_message_override = f"CONTEXT: User ਨੇ '{selected_specialty}' ਚੁਣਿਆ। ਉਹਨਾਂ ਨੂੰ doctor choose ਕਰਨ ਨੂੰ ਕਹੋ using these buttons: [{doctor_buttons}]"
-                        elif detected_language == 'bn':
-                            ai_message_override = f"CONTEXT: User '{selected_specialty}' নির্বাচন করেছেন। তাদের doctor choose করার জন্য বলুন using these buttons: [{doctor_buttons}]"
-                        else:
-                            ai_message_override = f"CONTEXT: The user chose '{selected_specialty}'. Ask them to choose a doctor using these buttons: [{doctor_buttons}]"
+                        doctor_buttons = ', '.join([f'{{"text": "Dr. {doc.full_name}", "action": "SELECT_DOCTOR", "parameters": {{"doctor_id": "{doc.doctor_id}"}}}}' for doc in doctors[:5]])
+                        ai_message_override = f"CONTEXT: The user chose '{selected_specialty}'. Ask them to choose a doctor using these buttons: [{doctor_buttons}]"
                     else:
-                        # Translate error message based on language
-                        if detected_language == 'hi':
-                            ai_message_override = f"CONTEXT: '{selected_specialty}' के लिए कोई doctor नहीं मिला। क्षमा करें और specialty के लिए फिर से पूछें।"
-                        elif detected_language == 'pa':
-                            ai_message_override = f"CONTEXT: '{selected_specialty}' ਲਈ ਕੋਈ doctor ਨਹੀਂ ਮਿਲਿਆ। ਮਾਫ਼ ਕਰਨਾ ਅਤੇ specialty ਲਈ ਫਿਰ ਤੋਂ ਪੁੱਛੋ।"
-                        elif detected_language == 'bn':
-                            ai_message_override = f"CONTEXT: '{selected_specialty}' এর জন্য কোনো doctor পাওয়া যায়নি। দুঃখিত এবং specialty এর জন্য আবার জিজ্ঞাসা করুন।"
-                        else:
-                            ai_message_override = f"CONTEXT: No doctors found for '{selected_specialty}'. Apologize and restart by asking for a specialty again."
+                        ai_message_override = f"CONTEXT: No doctors found for '{selected_specialty}'. Apologize and restart by asking for a specialty again."
                         booking_context.clear()
 
                 elif last_step == 'ask_doctor':
@@ -1674,39 +1424,12 @@ def predict():
                         booking_context['doctor_name'] = doctor.full_name
                         booking_context['last_step'] = 'ask_date'
                         dates = [{"text": (datetime.now() + timedelta(days=i)).strftime('%a, %b %d'), "iso": (datetime.now() + timedelta(days=i)).strftime('%Y-%m-%d')} for i in range(5)]
-                        # Translate date buttons based on language
-                        if detected_language == 'hi':
-                            dates[0]['text'] = 'आज'
-                            dates[1]['text'] = 'कल'
-                        elif detected_language == 'pa':
-                            dates[0]['text'] = 'ਅੱਜ'
-                            dates[1]['text'] = 'ਕਲ'
-                        elif detected_language == 'bn':
-                            dates[0]['text'] = 'আজ'
-                            dates[1]['text'] = 'কাল'
-                        else:
-                            dates[0]['text'] = 'Today'
-                            dates[1]['text'] = 'Tomorrow'
+                        dates[0]['text'] = 'Today'
+                        dates[1]['text'] = 'Tomorrow'
                         date_buttons = ', '.join([f'{{"text": "{d["text"]}", "action": "SELECT_DATE", "parameters": {{"dateISO": "{d["iso"]}"}}}}' for d in dates])
-                        # Translate date selection message based on language
-                        if detected_language == 'hi':
-                            ai_message_override = f"CONTEXT: User ने Dr. {doctor.full_name} को चुना। Date के लिए पूछें with these buttons: [{date_buttons}]"
-                        elif detected_language == 'pa':
-                            ai_message_override = f"CONTEXT: User ਨੇ Dr. {doctor.full_name} ਨੂੰ ਚੁਣਿਆ। Date ਲਈ ਪੁੱਛੋ with these buttons: [{date_buttons}]"
-                        elif detected_language == 'bn':
-                            ai_message_override = f"CONTEXT: User Dr. {doctor.full_name} কে নির্বাচন করেছেন। Date এর জন্য জিজ্ঞাসা করুন with these buttons: [{date_buttons}]"
-                        else:
-                            ai_message_override = f"CONTEXT: User chose Dr. {doctor.full_name}. Ask for a date with these buttons: [{date_buttons}]"
+                        ai_message_override = f"CONTEXT: User chose Dr. {doctor.full_name}. Ask for a date with these buttons: [{date_buttons}]"
                     else:
-                        # Translate error message based on language
-                        if detected_language == 'hi':
-                            ai_message_override = "CONTEXT: Invalid doctor। कृपया list से doctor चुनें।"
-                        elif detected_language == 'pa':
-                            ai_message_override = "CONTEXT: Invalid doctor। ਕਿਰਪਾ ਕਰਕੇ list ਤੋਂ doctor ਚੁਣੋ।"
-                        elif detected_language == 'bn':
-                            ai_message_override = "CONTEXT: Invalid doctor। অনুগ্রহ করে list থেকে doctor নির্বাচন করুন।"
-                        else:
-                            ai_message_override = "CONTEXT: Invalid doctor. Please choose a doctor from the list."
+                        ai_message_override = "CONTEXT: Invalid doctor. Please choose a doctor from the list."
 
                 elif last_step == 'ask_date' and button_action == 'SELECT_DATE':
                     selected_date_iso = button_params.get('dateISO')
@@ -1714,114 +1437,34 @@ def predict():
                         booking_context['date'] = selected_date_iso
                         booking_context['last_step'] = 'ask_time'
                         time_slots = _get_available_time_slots()
-                        # Translate time buttons based on language
-                        for slot in time_slots:
-                            if detected_language == 'hi':
-                                slot['text'] = slot['text'].replace('AM', 'सुबह').replace('PM', 'शाम')
-                            elif detected_language == 'pa':
-                                slot['text'] = slot['text'].replace('AM', 'ਸਵੇਰ').replace('PM', 'ਸ਼ਾਮ')
-                            elif detected_language == 'bn':
-                                slot['text'] = slot['text'].replace('AM', 'সকাল').replace('PM', 'বিকাল')
                         time_buttons = ', '.join([f'{{"text": "{s["text"]}", "action": "SELECT_TIME", "parameters": {{"timeISO": "{s["iso"]}"}}}}' for s in time_slots])
-                        # Translate time selection message based on language
-                        if detected_language == 'hi':
-                            ai_message_override = f"CONTEXT: User ने date चुनी। Time के लिए पूछें using these buttons: [{time_buttons}]"
-                        elif detected_language == 'pa':
-                            ai_message_override = f"CONTEXT: User ਨੇ date ਚੁਣੀ। Time ਲਈ ਪੁੱਛੋ using these buttons: [{time_buttons}]"
-                        elif detected_language == 'bn':
-                            ai_message_override = f"CONTEXT: User date নির্বাচন করেছেন। Time এর জন্য জিজ্ঞাসা করুন using these buttons: [{time_buttons}]"
-                        else:
-                            ai_message_override = f"CONTEXT: User chose a date. Ask for a time using these buttons: [{time_buttons}]"
+                        ai_message_override = f"CONTEXT: User chose a date. Ask for a time using these buttons: [{time_buttons}]"
                     else:
-                        # Translate error message based on language
-                        if detected_language == 'hi':
-                            ai_message_override = "CONTEXT: Invalid date। कृपया list से date चुनें।"
-                        elif detected_language == 'pa':
-                            ai_message_override = "CONTEXT: Invalid date। ਕਿਰਪਾ ਕਰਕੇ list ਤੋਂ date ਚੁਣੋ।"
-                        elif detected_language == 'bn':
-                            ai_message_override = "CONTEXT: Invalid date। অনুগ্রহ করে list থেকে date নির্বাচন করুন।"
-                        else:
-                            ai_message_override = "CONTEXT: Invalid date. Please pick a date from the list."
+                        ai_message_override = "CONTEXT: Invalid date. Please pick a date from the list."
 
                 elif last_step == 'ask_time' and button_action == 'SELECT_TIME':
                     selected_time_iso = button_params.get('timeISO')
                     if selected_time_iso:
                         booking_context['time'] = selected_time_iso
                         booking_context['last_step'] = 'ask_mode'
-                        # Translate mode buttons based on language
-                        if detected_language == 'hi':
-                            modes = ["वीडियो कॉल", "ऑडियो कॉल", "फोटो-आधारित"]
-                        elif detected_language == 'pa':
-                            modes = ["ਵੀਡੀਓ ਕਾਲ", "ਆਡੀਓ ਕਾਲ", "ਫੋਟੋ-ਅਧਾਰਿਤ"]
-                        elif detected_language == 'bn':
-                            modes = ["ভিডিও কল", "অডিও কল", "ফটো-ভিত্তিক"]
-                        else:
-                            modes = ["Video Call", "Audio Call", "Photo-based"]
+                        modes = ["Video Call", "Audio Call", "Photo-based"]
                         mode_buttons = ', '.join([f'{{"text": "{mode}", "action": "SELECT_MODE", "parameters": {{"mode": "{mode}"}}}}' for mode in modes])
-                        # Translate mode selection message based on language
-                        if detected_language == 'hi':
-                            ai_message_override = f"CONTEXT: User ने time चुना। Mode के लिए पूछें with these buttons: [{mode_buttons}]"
-                        elif detected_language == 'pa':
-                            ai_message_override = f"CONTEXT: User ਨੇ time ਚੁਣਿਆ। Mode ਲਈ ਪੁੱਛੋ with these buttons: [{mode_buttons}]"
-                        elif detected_language == 'bn':
-                            ai_message_override = f"CONTEXT: User time নির্বাচন করেছেন। Mode এর জন্য জিজ্ঞাসা করুন with these buttons: [{mode_buttons}]"
-                        else:
-                            ai_message_override = f"CONTEXT: User chose a time. Ask for the mode with these buttons: [{mode_buttons}]"
+                        ai_message_override = f"CONTEXT: User chose a time. Ask for the mode with these buttons: [{mode_buttons}]"
                     else:
-                        # Translate error message based on language
-                        if detected_language == 'hi':
-                            ai_message_override = "CONTEXT: Invalid time। कृपया list से time चुनें।"
-                        elif detected_language == 'pa':
-                            ai_message_override = "CONTEXT: Invalid time। ਕਿਰਪਾ ਕਰਕੇ list ਤੋਂ time ਚੁਣੋ।"
-                        elif detected_language == 'bn':
-                            ai_message_override = "CONTEXT: Invalid time। অনুগ্রহ করে list থেকে time নির্বাচন করুন।"
-                        else:
-                            ai_message_override = "CONTEXT: Invalid time. Please pick a time from the list."
+                        ai_message_override = "CONTEXT: Invalid time. Please pick a time from the list."
 
                 elif last_step == 'ask_mode' and button_action == 'SELECT_MODE':
                     selected_mode = button_params.get('mode')
                     if selected_mode in ["Video Call", "Audio Call", "Photo-based"]:
                         booking_context['mode'] = selected_mode
                         booking_context['last_step'] = 'finalize'
-                        # Translate confirmation message based on language
-                        if detected_language == 'hi':
-                            ai_message_override = "CONTEXT: सारे details select हो गए। आपका action 'FINALIZE_BOOKING' होना चाहिए। User से confirm करें।"
-                        elif detected_language == 'pa':
-                            ai_message_override = "CONTEXT: ਸਾਰੇ details select ਹੋ ਗਏ। ਤੁਹਾਡਾ action 'FINALIZE_BOOKING' ਹੋਣਾ ਚਾਹੀਦਾ ਹੈ। User ਨਾਲ confirm ਕਰੋ।"
-                        elif detected_language == 'bn':
-                            ai_message_override = "CONTEXT: সব details select হয়ে গেছে। আপনার action 'FINALIZE_BOOKING' হওয়া উচিত। User এর সাথে confirm করুন।"
-                        else:
-                            ai_message_override = "CONTEXT: All details selected. Your action MUST be 'FINALIZE_BOOKING'. Confirm with the user."
+                        ai_message_override = "CONTEXT: All details selected. Your action MUST be 'FINALIZE_BOOKING'. Confirm with the user."
                     else:
-                        # Translate error message based on language
-                        if detected_language == 'hi':
-                            ai_message_override = "CONTEXT: Invalid mode। कृपया list से mode चुनें।"
-                        elif detected_language == 'pa':
-                            ai_message_override = "CONTEXT: Invalid mode। ਕਿਰਪਾ ਕਰਕੇ list ਤੋਂ mode ਚੁਣੋ।"
-                        elif detected_language == 'bn':
-                            ai_message_override = "CONTEXT: Invalid mode। অনুগ্রহ করে list থেকে mode নির্বাচন করুন।"
-                        else:
-                            ai_message_override = "CONTEXT: Invalid mode. Please pick a mode from the list."
+                        ai_message_override = "CONTEXT: Invalid mode. Please pick a mode from the list."
                 else:
                     # This handles cases where the input doesn't match the expected step (e.g., "my head pains")
                     logger.warning(f"Booking flow stalled. User input '{user_message}' did not match step '{last_step}'. Re-prompting.")
-                    # Translate error message based on language
-                    if detected_language == 'hi':
-                        ai_message_override = f"CONTEXT: User ने unexpected response दिया। कृपया current step '{last_step}' के लिए option select करने को re-ask करें।"
-                    elif detected_language == 'pa':
-                        ai_message_override = f"CONTEXT: User ਨੇ unexpected response ਦਿੱਤਾ। ਕਿਰਪਾ ਕਰਕੇ current step '{last_step}' ਲਈ option select ਕਰਨ ਨੂੰ re-ask ਕਰੋ।"
-                    elif detected_language == 'bn':
-                        ai_message_override = f"CONTEXT: User unexpected response দিয়েছেন। অনুগ্রহ করে current step '{last_step}' এর জন্য option select করার জন্য re-ask করুন।"
-                    else:
-                        # Translate re-prompting message based on language
-                        if detected_language == 'hi':
-                            ai_message_override = f"CONTEXT: User ने unexpected response दिया। Current step '{last_step}' के लिए option select करने को re-ask करें।"
-                        elif detected_language == 'pa':
-                            ai_message_override = f"CONTEXT: User ਨੇ unexpected response ਦਿੱਤਾ। Current step '{last_step}' ਲਈ option select ਕਰਨ ਨੂੰ re-ask ਕਰੋ।"
-                        elif detected_language == 'bn':
-                            ai_message_override = f"CONTEXT: User unexpected response দিয়েছেন। Current step '{last_step}' এর জন্য option select করার জন্য re-ask করুন।"
-                        else:
-                            ai_message_override = f"CONTEXT: User provided an unexpected response. Please re-ask them to select an option for the current step: '{last_step}'."
+                    ai_message_override = f"CONTEXT: User provided an unexpected response. Please re-ask them to select an option for the current step: '{last_step}'."
 
                 # Save context only if the restart wasn't just handled
                 if hasattr(initialize_ai_components, '_conversation_memory') and task_in_progress != 'handled_restart':
@@ -1839,35 +1482,12 @@ def predict():
 
             if turn_count < 3:
                 symptoms_history = "; ".join(symptom_context['symptoms_reported'])
-                # Translate the context message based on language
-                if detected_language == 'hi':
-                    ai_message_override = (
-                        f"CONTEXT: यह symptom check conversation है। User ने पहले यह जानकारी दी है: '{symptoms_history}'। "
-                        f"उनका latest reply है: '{user_message}'। "
-                        "उनके latest reply को acknowledge करें और अगला logical clarifying question पूछें। "
-                        "DO NOT repeat a question that has already been answered in the history."
-                    )
-                elif detected_language == 'pa':
-                    ai_message_override = (
-                        f"CONTEXT: ਇਹ symptom check conversation ਹੈ। User ਨੇ ਪਹਿਲਾਂ ਇਹ ਜਾਣਕਾਰੀ ਦਿੱਤੀ ਹੈ: '{symptoms_history}'। "
-                        f"ਉਹਨਾਂ ਦਾ latest reply ਹੈ: '{user_message}'। "
-                        "ਉਹਨਾਂ ਦੇ latest reply ਨੂੰ acknowledge ਕਰੋ ਅਤੇ ਅਗਲਾ logical clarifying question ਪੁੱਛੋ। "
-                        "DO NOT repeat a question that has already been answered in the history."
-                    )
-                elif detected_language == 'bn':
-                    ai_message_override = (
-                        f"CONTEXT: এটি symptom check conversation। User আগে এই তথ্য দিয়েছেন: '{symptoms_history}'। "
-                        f"তাদের latest reply হল: '{user_message}'। "
-                        "তাদের latest reply কে acknowledge করুন এবং পরবর্তী logical clarifying question করুন। "
-                        "DO NOT repeat a question that has already been answered in the history."
-                    )
-                else:
-                    ai_message_override = (
-                        f"CONTEXT: This is a symptom check conversation. The user has already provided this information: '{symptoms_history}'. "
-                        f"Their latest reply is: '{user_message}'. "
-                        "Acknowledge their latest reply and ask the *next* logical clarifying question. "
-                        "DO NOT repeat a question that has already been answered in the history."
-                    )
+                ai_message_override = (
+                    f"CONTEXT: This is a symptom check conversation. The user has already provided this information: '{symptoms_history}'. "
+                    f"Their latest reply is: '{user_message}'. "
+                    "Acknowledge their latest reply and ask the *next* logical clarifying question. "
+                    "DO NOT repeat a question that has already been answered in the history."
+                )
 
                 # Correctly increment the turn counter
                 symptom_context['turn_count'] = turn_count + 1
@@ -1877,31 +1497,14 @@ def predict():
 
             else:
                 reported_symptoms_str = '; '.join(symptom_context['symptoms_reported'])
-                # Translate buttons based on detected language
-                if detected_language == 'hi':
-                    scan_text = "📷 दवा स्कैन करें"
-                    upload_text = "📤 प्रिस्क्रिप्शन अपलोड करें"
-                    disclaimer = "यह चिकित्सा सलाह नहीं है। सही निदान के लिए कृपया डॉक्टर से सलाह लें।"
-                elif detected_language == 'pa':
-                    scan_text = "📷 ਦਵਾਈ ਸਕੈਨ ਕਰੋ"
-                    upload_text = "📤 ਪ੍ਰਿਸਕ੍ਰਿਪਸ਼ਨ ਅਪਲੋਡ ਕਰੋ"
-                    disclaimer = "ਇਹ ਡਾਕਟਰੀ ਸਲਾਹ ਨਹੀਂ ਹੈ। ਸਹੀ ਨਿਦਾਨ ਲਈ ਕਿਰਪਾ ਕਰਕੇ ਡਾਕਟਰ ਨਾਲ ਸਲਾਹ ਕਰੋ।"
-                elif detected_language == 'bn':
-                    scan_text = "📷 ওষুধ স্ক্যান করুন"
-                    upload_text = "📤 প্রেসক্রিপশন আপলোড করুন"
-                    disclaimer = "এটি চিকিৎসা পরামর্শ নয়। সঠিক নির্ণয়ের জন্য অনুগ্রহ করে ডাক্তারের সাথে পরামর্শ করুন।"
-                else:
-                    scan_text = "📷 Scan Medicine"
-                    upload_text = "📤 Upload Prescription"
-                    disclaimer = "This is not medical advice. For a proper diagnosis, please consult a doctor."
                 ai_message_override = (
                     f"CONTEXT: The user has reported the following symptoms: '{reported_symptoms_str}'. "
                     "You have asked enough questions. Provide a simple, safe home remedy for these symptoms. "
-                    f"Then, you MUST include this exact disclaimer: '{disclaimer}' "
+                    "Then, you MUST include this exact disclaimer: 'This is not medical advice. For a proper diagnosis, please consult a doctor.' "
                     "After the remedy and disclaimer, provide guidance on how to use the medicine scan and prescription upload features, "
                     "then show these interactive buttons for navigation: "
-                    f'[{{"text": "{scan_text}", "action": "START_MEDICINE_SCANNER", "parameters": {{}}, "style": "primary"}}, '
-                    f'{{"text": "{upload_text}", "action": "UPLOAD_PRESCRIPTION", "parameters": {{}}, "style": "secondary"}}]. '
+                    "[{\"text\": \"📷 Scan Medicine\", \"action\": \"START_MEDICINE_SCANNER\", \"parameters\": {}, \"style\": \"primary\"}, "
+                    "{\"text\": \"📤 Upload Prescription\", \"action\": \"UPLOAD_PRESCRIPTION\", \"parameters\": {}, \"style\": \"secondary\"}]. "
                     "Your final action should be 'SHOW_MEDICINE_REMEDY'."
                     )
                 if hasattr(initialize_ai_components, '_conversation_memory'):
@@ -1915,52 +1518,8 @@ def predict():
                 booking_context.clear()
                 booking_context['last_step'] = 'ask_specialty'
                 available_specialties = _get_available_specialties_from_db()
-                # Translate specialty buttons based on language
-                if detected_language == 'hi':
-                    specialty_translations = {
-                        "General Physician": "जनरल फिजिशियन",
-                        "Dermatologist": "त्वचा विशेषज्ञ",
-                        "Child Specialist": "बाल विशेषज्ञ",
-                        "Cardiologist": "हृदय विशेषज्ञ",
-                        "Gynecologist": "स्त्री रोग विशेषज्ञ",
-                        "Orthopedic": "हड्डी विशेषज्ञ",
-                        "Neurologist": "न्यूरोलॉजिस्ट"
-                    }
-                    translated_specialties = [specialty_translations.get(s, s) for s in available_specialties]
-                elif detected_language == 'pa':
-                    specialty_translations = {
-                        "General Physician": "ਜਨਰਲ ਫਿਜ਼ੀਸ਼ੀਅਨ",
-                        "Dermatologist": "ਚਮੜੀ ਵਿਸ਼ੇਸ਼ਜ",
-                        "Child Specialist": "ਬੱਚੇ ਵਿਸ਼ੇਸ਼ਜ",
-                        "Cardiologist": "ਦਿਲ ਵਿਸ਼ੇਸ਼ਜ",
-                        "Gynecologist": "ਔਰਤ ਰੋਗ ਵਿਸ਼ੇਸ਼ਜ",
-                        "Orthopedic": "ਹੱਡੀ ਵਿਸ਼ੇਸ਼ਜ",
-                        "Neurologist": "ਨਿਊਰੋਲੋਜਿਸਟ"
-                    }
-                    translated_specialties = [specialty_translations.get(s, s) for s in available_specialties]
-                elif detected_language == 'bn':
-                    specialty_translations = {
-                        "General Physician": "জেনারেল ফিজিশিয়ান",
-                        "Dermatologist": "চর্ম বিশেষজ্ঞ",
-                        "Child Specialist": "শিশু বিশেষজ্ঞ",
-                        "Cardiologist": "হৃদয় বিশেষজ্ঞ",
-                        "Gynecologist": "স্ত্রী রোগ বিশেষজ্ঞ",
-                        "Orthopedic": "হাড় বিশেষজ্ঞ",
-                        "Neurologist": "নিউরোলজিস্ট"
-                    }
-                    translated_specialties = [specialty_translations.get(s, s) for s in available_specialties]
-                else:
-                    translated_specialties = available_specialties
-                specialty_buttons = ', '.join([f'{{"text": "{s}", "action": "SELECT_SPECIALTY", "parameters": {{"specialty": "{available_specialties[i]}"}}}}' for i, s in enumerate(translated_specialties)])
-                # Translate initial booking message based on language
-                if detected_language == 'hi':
-                    ai_message_override = f"CONTEXT: User appointment book करना चाहता है। उनसे specialty select करने को कहें using these buttons: [{specialty_buttons}]"
-                elif detected_language == 'pa':
-                    ai_message_override = f"CONTEXT: User appointment book ਕਰਨਾ ਚਾਹੁੰਦਾ ਹੈ। ਉਹਨਾਂ ਨੂੰ specialty select ਕਰਨ ਨੂੰ ਕਹੋ using these buttons: [{specialty_buttons}]"
-                elif detected_language == 'bn':
-                    ai_message_override = f"CONTEXT: User appointment book করতে চান। তাদের specialty select করার জন্য বলুন using these buttons: [{specialty_buttons}]"
-                else:
-                    ai_message_override = f"CONTEXT: User wants to book an appointment. Ask them to select a specialty using these buttons: [{specialty_buttons}]"
+                specialty_buttons = ', '.join([f'{{"text": "{s}", "action": "SELECT_SPECIALTY", "parameters": {{"specialty": "{s}"}}}}' for s in available_specialties])
+                ai_message_override = f"CONTEXT: User wants to book an appointment. Ask them to select a specialty using these buttons: [{specialty_buttons}]"
                 if hasattr(initialize_ai_components, '_conversation_memory'):
                     initialize_ai_components._conversation_memory.set_current_task(current_user.patient_id, 'appointment_booking', booking_context)
 
@@ -1970,15 +1529,7 @@ def predict():
                 symptom_context.clear()
                 symptom_context['symptoms_reported'] = [user_message] # Start with the first symptom
                 symptom_context['turn_count'] = 1 # Set turn count to 1
-                # Translate the context message based on language
-                if detected_language == 'hi':
-                    ai_message_override = f"CONTEXT: Symptom check की शुरुआत। User ने कहा '{user_message}'। उनके symptom को acknowledge करें और पहला clarifying question पूछें (जैसे 'कितने समय से?' या 'दर्द तेज है या हल्का?')।"
-                elif detected_language == 'pa':
-                    ai_message_override = f"CONTEXT: Symptom check ਦੀ ਸ਼ੁਰੂਆਤ। User ਨੇ ਕਿਹਾ '{user_message}'। ਉਹਨਾਂ ਦੇ symptom ਨੂੰ acknowledge ਕਰੋ ਅਤੇ ਪਹਿਲਾ clarifying question ਪੁੱਛੋ (ਜਿਵੇਂ 'ਕਿੰਨੇ ਸਮੇਂ ਤੋਂ?' ਜਾਂ 'ਦਰਦ ਤੇਜ਼ ਹੈ ਜਾਂ ਹਲਕਾ?')।"
-                elif detected_language == 'bn':
-                    ai_message_override = f"CONTEXT: Symptom check এর শুরু। User বলেছেন '{user_message}'। তাদের symptom কে acknowledge করুন এবং প্রথম clarifying question করুন (যেমন 'কতদিন ধরে?' বা 'ব্যথা তীব্র না হালকা?')।"
-                else:
-                    ai_message_override = f"CONTEXT: Start of a symptom check. User said '{user_message}'. Acknowledge their symptom and ask your first clarifying question (e.g., 'For how long?' or 'Is it a sharp or dull pain?')."
+                ai_message_override = f"CONTEXT: Start of a symptom check. User said '{user_message}'. Acknowledge their symptom and ask your first clarifying question (e.g., 'For how long?' or 'Is it a sharp or dull pain?')."
                 if hasattr(initialize_ai_components, '_conversation_memory'):
                     initialize_ai_components._conversation_memory.set_current_task(current_user.patient_id, 'symptom_triage', symptom_context)
 
@@ -1986,37 +1537,19 @@ def predict():
             elif primary_intent in ['medicine_scan', 'how_to_medicine_scan']:
                 if hasattr(initialize_ai_components, '_conversation_memory'):
                     initialize_ai_components._conversation_memory.complete_task(current_user.patient_id) # Clear any previous task
-                # Translate button text based on language
-                if detected_language == 'hi':
-                    button_text = "📷 स्कैनर खोलें"
-                elif detected_language == 'pa':
-                    button_text = "📷 ਸਕੈਨਰ ਖੋਲ੍ਹੋ"
-                elif detected_language == 'bn':
-                    button_text = "📷 স্ক্যানার খুলুন"
-                else:
-                    button_text = "📷 Open Scanner"
                 ai_message_override = (
                     "CONTEXT: The user wants to scan a medicine. First, provide a brief, friendly guide on how to use the scanner (e.g., 'I can help with that! Just point your camera at the medicine...'). "
                     "Then, your action MUST be 'SHOW_GUIDANCE' and you MUST include this exact button in the interactive_buttons array: "
-                    f'[{{"text": "{button_text}", "action": "START_MEDICINE_SCANNER", "parameters": {{}}, "style": "primary"}}]'
+                    '[{"text": "📷 Open Scanner", "action": "START_MEDICINE_SCANNER", "parameters": {}, "style": "primary"}]'
                 )
 
             elif primary_intent in ['prescription_upload', 'how_to_prescription_upload', 'prescription_inquiry']:
                 if hasattr(initialize_ai_components, '_conversation_memory'):
                     initialize_ai_components._conversation_memory.complete_task(current_user.patient_id) # Clear any previous task
-                # Translate button text based on language
-                if detected_language == 'hi':
-                    button_text = "📤 प्रिस्क्रिप्शन अपलोड करें"
-                elif detected_language == 'pa':
-                    button_text = "📤 ਪ੍ਰਿਸਕ੍ਰਿਪਸ਼ਨ ਅਪਲੋਡ ਕਰੋ"
-                elif detected_language == 'bn':
-                    button_text = "📤 প্রেসক্রিপশন আপলোড করুন"
-                else:
-                    button_text = "📤 Upload Prescription"
                 ai_message_override = (
                     "CONTEXT: The user wants to upload a prescription. First, provide a brief, friendly guide on how to upload (e.g., 'Okay, let\\'s upload your prescription. Make sure the photo is clear...'). "
                     "Then, your action MUST be 'SHOW_GUIDANCE' and you MUST include this exact button in the interactive_buttons array: "
-                    f'[{{"text": "{button_text}", "action": "UPLOAD_PRESCRIPTION", "parameters": {{}}, "style": "primary"}}]'
+                    '[{"text": "📤 Upload Prescription", "action": "UPLOAD_PRESCRIPTION", "parameters": {}, "style": "primary"}]'
                 )
             # --- End Guidance Buttons Logic ---
 
@@ -2026,7 +1559,7 @@ def predict():
         else:
             history = []
         # Use primary_intent determined *after* state management for the context
-        context = {"user_intent": primary_intent, "context_history": history, "language": detected_language}
+        context = {"user_intent": primary_intent, "context_history": history}
 
         action_payload = None
         if sehat_sahara_client and sehat_sahara_client.is_available:
@@ -2042,10 +1575,6 @@ def predict():
 
                     action_payload = json.loads(cleaned_response)
 
-                    # Clean the response to remove any HTML tags
-                    if "response" in action_payload:
-                        action_payload["response"] = clean_ai_response(action_payload["response"])
-
                     # --- Final Booking Handling (No changes needed here) ---
                     if action_payload.get("action") == "FINALIZE_BOOKING":
                         booking_context = _get_or_create_booking_context(current_user.patient_id)
@@ -2059,15 +1588,7 @@ def predict():
                         if doctor and appt_date and appt_time_str:
                             appt_datetime = datetime.fromisoformat(f"{appt_date}T{appt_time_str}:00")
 
-                            # Translate confirmation message based on language
-                            if detected_language == 'hi':
-                                action_payload['response'] = f"बहुत बढ़िया! मैं डॉ. {doctor.full_name} के साथ {appt_datetime.strftime('%A, %b %d को %I:%M %p')} बजे का आपका appointment confirm कर रहा हूं। एक मिनट..."
-                            elif detected_language == 'pa':
-                                action_payload['response'] = f"ਬਹੁਤ ਵਧੀਆ! ਮੈਂ ਡਾ. {doctor.full_name} ਨਾਲ {appt_datetime.strftime('%A, %b %d ਨੂੰ %I:%M %p')} ਵਜੇ ਦਾ ਤੁਹਾਡਾ appointment confirm ਕਰ ਰਿਹਾ ਹਾਂ। ਇੱਕ ਮਿੰਟ..."
-                            elif detected_language == 'bn':
-                                action_payload['response'] = f"খুব ভালো! আমি ডা. {doctor.full_name} এর সাথে {appt_datetime.strftime('%A, %b %d তারিখে %I:%M %p')} টায় আপনার appointment confirm করছি। এক মিনিট..."
-                            else:
-                                action_payload['response'] = f"Great! I'm confirming your appointment with Dr. {doctor.full_name} for {appt_datetime.strftime('%A, %b %d at %I:%M %p')}. One moment..."
+                            action_payload['response'] = f"Great! I'm confirming your appointment with Dr. {doctor.full_name} for {appt_datetime.strftime('%A, %b %d at %I:%M %p')}. One moment..."
                             action_payload['action'] = 'EXECUTE_BOOKING'
                             action_payload['parameters'] = {
                                 'doctorId': doctor.id, # Use the integer primary key ID for the booking endpoint
@@ -2081,16 +1602,7 @@ def predict():
                                 initialize_ai_components._conversation_memory.complete_task(current_user.patient_id)
                         else:
                             logger.error(f"Missing booking details for FINALIZE_BOOKING: doctor={doctor}, date={appt_date}, time={appt_time_str}")
-                            # Translate error message based on language
-                            if detected_language == 'hi':
-                                error_msg = "क्षमा करें, booking details retrieve करने में error हुआ। फिर से शुरू करते हैं।"
-                            elif detected_language == 'pa':
-                                error_msg = "ਮਾਫ਼ ਕਰਨਾ, booking details retrieve ਕਰਨ ਵਿੱਚ error ਹੋਇਆ। ਫਿਰ ਤੋਂ ਸ਼ੁਰੂ ਕਰਦੇ ਹਾਂ।"
-                            elif detected_language == 'bn':
-                                error_msg = "দুঃখিত, booking details retrieve করতে error হয়েছে। আবার শুরু করি।"
-                            else:
-                                error_msg = "I'm sorry, there was an error retrieving the booking details. Let's start over."
-                            action_payload['response'] = error_msg
+                            action_payload['response'] = "I'm sorry, there was an error retrieving the booking details. Let's start over."
                             action_payload['action'] = 'BOOKING_FAILED'
                             if hasattr(initialize_ai_components, '_conversation_memory'):
                                 initialize_ai_components._conversation_memory.complete_task(current_user.patient_id)
@@ -2098,22 +1610,9 @@ def predict():
 
                     # --- Medicine Remedy Buttons (No changes needed here) ---
                     if action_payload.get("action") == "SHOW_MEDICINE_REMEDY" and "interactive_buttons" not in action_payload:
-                        # Translate buttons based on detected language
-                        if detected_language == 'hi':
-                            scan_text = "📷 दवा स्कैन करें"
-                            upload_text = "📤 प्रिस्क्रिप्शन अपलोड करें"
-                        elif detected_language == 'pa':
-                            scan_text = "📷 ਦਵਾਈ ਸਕੈਨ ਕਰੋ"
-                            upload_text = "📤 ਪ੍ਰਿਸਕ੍ਰਿਪਸ਼ਨ ਅਪਲੋਡ ਕਰੋ"
-                        elif detected_language == 'bn':
-                            scan_text = "📷 ওষুধ স্ক্যান করুন"
-                            upload_text = "📤 প্রেসক্রিপশন আপলোড করুন"
-                        else:
-                            scan_text = "📷 Scan Medicine"
-                            upload_text = "📤 Upload Prescription"
                         action_payload["interactive_buttons"] = [
-                            {"text": scan_text, "action": "START_MEDICINE_SCANNER", "parameters": {}, "style": "primary"},
-                            {"text": upload_text, "action": "UPLOAD_PRESCRIPTION", "parameters": {}, "style": "secondary"}
+                            {"text": "📷 Scan Medicine", "action": "START_MEDICINE_SCANNER", "parameters": {}, "style": "primary"},
+                            {"text": "📤 Upload Prescription", "action": "UPLOAD_PRESCRIPTION", "parameters": {}, "style": "secondary"}
                         ]
                     # --- End Medicine Remedy Buttons ---
 
@@ -2125,23 +1624,19 @@ def predict():
                     logger.error(f"Error processing AI response: {e}", exc_info=True)
                     action_payload = None
 
-        # --- Fallback Response Generation ---
+        # --- Fallback Response Generation (No changes needed) ---
         if not action_payload:
             logger.warning(f"AI failed or unavailable. Using local fallback for intent: {primary_intent}")
             action_payload = response_generator.generate_response(
                 user_message=user_message,
                 nlu_result=nlu_understanding,
-                user_context={'user_id': current_user.patient_id, 'language': detected_language},
+                user_context={'user_id': current_user.patient_id},
                 conversation_history=history
             )
             # Ensure fallback has necessary keys
             if "action" not in action_payload: action_payload["action"] = "CONTINUE_CONVERSATION"
             if "parameters" not in action_payload: action_payload["parameters"] = {}
             if "interactive_buttons" not in action_payload: action_payload["interactive_buttons"] = []
-
-            # Clean the response to remove any HTML tags
-            if "response" in action_payload:
-                action_payload["response"] = clean_ai_response(action_payload["response"])
 
 
         # --- FINAL PROCESSING & SAVING ---
@@ -2162,10 +1657,6 @@ def predict():
             if hasattr(initialize_ai_components, '_conversation_memory'):
                 initialize_ai_components._conversation_memory.update_button_visibility(current_user.patient_id, 'medicine_recommendation')
 
-        # Update user's preferred language in memory
-        if hasattr(initialize_ai_components, '_conversation_memory'):
-            initialize_ai_components._conversation_memory.update_user_language(current_user.patient_id, detected_language)
-
         # Save conversation memory (No changes needed here)
         try:
             if hasattr(initialize_ai_components, '_conversation_memory'):
@@ -2182,16 +1673,7 @@ def predict():
     except Exception as e:
         logger.error(f"FATAL ERROR in /predict endpoint: {e}", exc_info=True)
         db.session.rollback()
-        # Translate fallback response based on detected language
-        if detected_language == 'hi':
-            fallback_response = "मैं technical issue का सामना कर रहा हूं। कृपया फिर से try करें।"
-        elif detected_language == 'pa':
-            fallback_response = "ਮੈਂ technical issue ਦਾ ਸਾਮ੍ਹਣਾ ਕਰ ਰਿਹਾ ਹਾਂ। ਕਿਰਪਾ ਕਰਕੇ ਫਿਰ ਤੋਂ try ਕਰੋ।"
-        elif detected_language == 'bn':
-            fallback_response = "আমি technical issue এর সম্মুখীন হচ্ছি। অনুগ্রহ করে আবার try করুন।"
-        else:
-            fallback_response = "I'm having a technical issue. Please try again."
-        return jsonify({"response": fallback_response, "action": "SHOW_APP_FEATURES", "interactive_buttons": []}), 500
+        return jsonify({"response": "I'm having a technical issue. Please try again.", "action": "SHOW_APP_FEATURES", "interactive_buttons": []}), 500
 
 # In chatbot.py, replace the whole book_doctor function with this one
 @app.route("/v1/book-doctor", methods=["POST"])
@@ -2293,20 +1775,7 @@ def complete_appointment():
         appointment_id = data.get("appointmentId", "").strip()
         
         if not user_id or not appointment_id:
-            # Get user's preferred language
-            detected_language = get_user_language(user_id)
-
-            # Translate error message based on language
-            if detected_language == 'hi':
-                error_message = "userId और appointmentId required हैं।"
-            elif detected_language == 'pa':
-                error_message = "userId ਅਤੇ appointmentId required ਹਨ।"
-            elif detected_language == 'bn':
-                error_message = "userId এবং appointmentId required।"
-            else:
-                error_message = "userId and appointmentId are required"
-
-            return jsonify({"success": False, "message": error_message}), 400
+            return jsonify({"success": False, "message": "userId and appointmentId are required"}), 400
         
         # Find appointment
         appointment = Appointment.query.filter_by(appointment_id=appointment_id).first()
@@ -2335,20 +1804,7 @@ def complete_appointment():
         
     except Exception as e:
         logger.error(f"Complete appointment error: {e}")
-        # Get user's preferred language
-        detected_language = get_user_language(user_id)
-
-        # Translate error message based on language
-        if detected_language == 'hi':
-            error_message = "Appointment complete करने में failed।"
-        elif detected_language == 'pa':
-            error_message = "Appointment complete ਕਰਨ ਵਿੱਚ failed।"
-        elif detected_language == 'bn':
-            error_message = "Appointment complete করতে failed।"
-        else:
-            error_message = "Failed to complete appointment"
-
-        return jsonify({"success": False, "message": error_message}), 500
+        return jsonify({"success": False, "message": "Failed to complete appointment"}), 500
 # Add this entire new function to chatbot.py
 
 @app.route("/v1/scan-medicine", methods=["POST"])
@@ -2363,27 +1819,7 @@ def scan_medicine():
         user_message = data.get("message", "Please identify this medicine from the image.")
 
         if not image_data:
-            # Get user_id from request data
-            user_id_str = data.get("userId", "").strip()
-
-            # Get user's preferred language from database
-            detected_language = 'en'  # default
-            if user_id_str:
-                user = User.query.filter_by(patient_id=user_id_str, is_active=True).first()
-                if user:
-                    detected_language = user.preferred_language or 'en'
-
-            # Translate error message based on language
-            if detected_language == 'hi':
-                error_message = "कोई image data provide नहीं की गई।"
-            elif detected_language == 'pa':
-                error_message = "ਕੋਈ image data provide ਨਹੀਂ ਕੀਤੀ ਗਈ।"
-            elif detected_language == 'bn':
-                error_message = "কোনো image data provide করা হয়নি।"
-            else:
-                error_message = "No image data was provided."
-
-            return jsonify({"success": False, "error": error_message}), 400
+            return jsonify({"success": False, "error": "No image data was provided."}), 400
 
         # Check if the AI client for image analysis is available
         if groq_scout and groq_scout.is_available:
@@ -2401,67 +1837,19 @@ def scan_medicine():
             )
 
             if analysis_result:
-                # Translate success message based on language
-                if detected_language == 'hi':
-                    success_message = "Medicine successfully identify हो गई।"
-                elif detected_language == 'pa':
-                    success_message = "Medicine successfully identify ਹੋ ਗਈ।"
-                elif detected_language == 'bn':
-                    success_message = "Medicine successfully identify হয়ে গেছে।"
-                else:
-                    success_message = "Medicine successfully identified."
-
                 return jsonify({
                     "success": True,
-                    "message": success_message,
                     "medicine_info": analysis_result
                 })
             else:
-                # Translate error message based on language
-                if detected_language == 'hi':
-                    error_message = "AI analysis failed to identify the medicine."
-                elif detected_language == 'pa':
-                    error_message = "AI analysis failed to identify the medicine."
-                elif detected_language == 'bn':
-                    error_message = "AI analysis failed to identify the medicine."
-                else:
-                    error_message = "AI analysis failed to identify the medicine."
-
-                return jsonify({"success": False, "error": error_message}), 500
+                return jsonify({"success": False, "error": "AI analysis failed to identify the medicine."}), 500
         else:
-            # Get user's preferred language from database
-            detected_language = 'en'  # default
-            if user_id_str:
-                user = User.query.filter_by(patient_id=user_id_str, is_active=True).first()
-                if user:
-                    detected_language = user.preferred_language or 'en'
-
-            # Translate error message based on language
-            if detected_language == 'hi':
-                error_message = "Image analysis service currently unavailable है।"
-            elif detected_language == 'pa':
-                error_message = "Image analysis service currently unavailable ਹੈ।"
-            elif detected_language == 'bn':
-                error_message = "Image analysis service currently unavailable।"
-            else:
-                error_message = "The image analysis service is currently unavailable."
-
-            return jsonify({"success": False, "error": error_message}), 503
+            return jsonify({"success": False, "error": "The image analysis service is currently unavailable."}), 503
 
     except Exception as e:
         logger.error(f"❌ Scan medicine error: {e}", exc_info=True)
         update_system_state('scan_medicine', success=False)
-        # Translate error message based on language
-        if detected_language == 'hi':
-            error_message = "Scan के दौरान internal server error हुआ।"
-        elif detected_language == 'pa':
-            error_message = "Scan ਦੌਰਾਨ internal server error ਹੋਇਆ।"
-        elif detected_language == 'bn':
-            error_message = "Scan এর সময় internal server error হয়েছে।"
-        else:
-            error_message = "An internal server error occurred during the scan."
-
-        return jsonify({"success": False, "error": error_message}), 500
+        return jsonify({"success": False, "error": "An internal server error occurred during the scan."}), 500
         
 @app.route("/v1/history", methods=["POST"])
 def get_history():
@@ -3413,45 +2801,11 @@ def upload_prescription():
         image_data = data.get("imageData", "").strip()
 
         if not all([user_id_str, provider_name, image_data]):
-            # Get user's preferred language from database
-            detected_language = 'en'  # default
-            if user_id_str:
-                user = User.query.filter_by(patient_id=user_id_str, is_active=True).first()
-                if user:
-                    detected_language = user.preferred_language or 'en'
-
-            # Translate error message based on language
-            if detected_language == 'hi':
-                error_message = "userId, providerName, और imageData required हैं।"
-            elif detected_language == 'pa':
-                error_message = "userId, providerName, ਅਤੇ imageData required ਹਨ।"
-            elif detected_language == 'bn':
-                error_message = "userId, providerName, এবং imageData required।"
-            else:
-                error_message = "userId, providerName, and imageData are required"
-
-            return jsonify({"error": error_message}), 400
+            return jsonify({"error": "userId, providerName, and imageData are required"}), 400
 
         user = User.query.filter_by(patient_id=user_id_str, is_active=True).first()
         if not user:
-            # Get user's preferred language from database
-            detected_language = 'en'  # default
-            if user_id_str:
-                user_check = User.query.filter_by(patient_id=user_id_str, is_active=True).first()
-                if user_check:
-                    detected_language = user_check.preferred_language or 'en'
-
-            # Translate error message based on language
-            if detected_language == 'hi':
-                error_message = "User नहीं मिला।"
-            elif detected_language == 'pa':
-                error_message = "User ਨਹੀਂ ਮਿਲਿਆ।"
-            elif detected_language == 'bn':
-                error_message = "User পাওয়া যায়নি।"
-            else:
-                error_message = "User not found"
-
-            return jsonify({"error": error_message}), 401
+            return jsonify({"error": "User not found"}), 401
 
         # Use AI to analyze the prescription image
         extracted_data = None
@@ -3479,24 +2833,7 @@ def upload_prescription():
             base64.b64decode(image_data_clean)
         except Exception as decode_error:
             logger.error(f"Failed to decode Base64 image data: {decode_error}")
-            # Get user's preferred language from database
-            detected_language = 'en'  # default
-            if user_id_str:
-                user = User.query.filter_by(patient_id=user_id_str, is_active=True).first()
-                if user:
-                    detected_language = user.preferred_language or 'en'
-
-            # Translate error message based on language
-            if detected_language == 'hi':
-                error_message = "Invalid image data format।"
-            elif detected_language == 'pa':
-                error_message = "Invalid image data format।"
-            elif detected_language == 'bn':
-                error_message = "Invalid image data format।"
-            else:
-                error_message = "Invalid image data format"
-
-            return jsonify({"error": error_message}), 400
+            return jsonify({"error": "Invalid image data format"}), 400
 
         # Create HealthRecord for the prescription with Base64 data in database
         record = HealthRecord(
@@ -3536,17 +2873,7 @@ def upload_prescription():
         except Exception as commit_error:
             logger.error(f"❌ Failed to commit prescription upload for user {user.patient_id}: {commit_error}")
             db.session.rollback()
-            # Translate error message based on language
-            if detected_language == 'hi':
-                error_message = "Database में prescription save करने में failed।"
-            elif detected_language == 'pa':
-                error_message = "Database ਵਿੱਚ prescription save ਕਰਨ ਵਿੱਚ failed।"
-            elif detected_language == 'bn':
-                error_message = "Database এ prescription save করতে failed।"
-            else:
-                error_message = "Failed to save prescription to database"
-
-            return jsonify({"error": error_message}), 500
+            return jsonify({"error": "Failed to save prescription to database"}), 500
 
 
     
@@ -3555,19 +2882,9 @@ def upload_prescription():
             prescription_data, user.preferred_language
         )
 
-        # Translate success message based on language
-        if detected_language == 'hi':
-            success_message = "Prescription successfully upload और analyze हो गई।"
-        elif detected_language == 'pa':
-            success_message = "Prescription successfully upload ਅਤੇ analyze ਹੋ ਗਈ।"
-        elif detected_language == 'bn':
-            success_message = "Prescription successfully upload এবং analyze হয়ে গেছে।"
-        else:
-            success_message = "Prescription uploaded and analyzed successfully"
-
         return jsonify({
             "success": True,
-            "message": success_message,
+            "message": "Prescription uploaded and analyzed successfully",
             "recordId": record.record_id,
             "extractedData": {
                 "doctor_name": doctor_name,
@@ -3583,17 +2900,7 @@ def upload_prescription():
         logger.error(traceback.format_exc())
         update_system_state('upload_prescription', success=False)
         db.session.rollback()
-        # Translate error message based on language
-        if detected_language == 'hi':
-            error_message = "Prescription upload करने में failed।"
-        elif detected_language == 'pa':
-            error_message = "Prescription upload ਕਰਨ ਵਿੱਚ failed।"
-        elif detected_language == 'bn':
-            error_message = "Prescription upload করতে failed।"
-        else:
-            error_message = "Failed to upload prescription"
-
-        return jsonify({"error": error_message}), 500
+        return jsonify({"error": "Failed to upload prescription"}), 500
 
 @app.route("/v1/admin/users", methods=["GET"])
 @admin_required
