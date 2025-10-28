@@ -3508,6 +3508,7 @@ def get_doctor_dashboard():
             appointments_data.append({
                 "id": appt.appointment_id,
                 "patient": patient.full_name if patient else "Unknown",
+                "patientId": patient.patient_id if patient else None,
                 "time": appt.appointment_datetime.strftime('%I:%M %p'),
                 "dateTime": appt.appointment_datetime.isoformat() + "Z", # <-- ADD THIS LINE
                 "type": appt.appointment_type,
@@ -3776,6 +3777,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
