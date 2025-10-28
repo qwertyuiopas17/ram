@@ -166,6 +166,7 @@ CORS(app, supports_credentials=True, resources={
             "https://saharasaathi.netlify.app",
             "https://sahara-sathi.onrender.com",
             "https://sehat-sahara.onrender.com",
+            "https://fancy-choux-1986b9.netlify.app",
             "*"  # Allow all origins for static files
         ],
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -1242,6 +1243,10 @@ JSON Output:"""
 @app.route("/v1/patient-summary/<patient_id_str>", methods=["GET"])
 def get_patient_summary_for_doctor(patient_id_str):
     """Provides a patient summary (symptoms, vitals, prescriptions) for the doctor."""
+    # --- ADD LOGGING HERE ---
+    logger.info(f"Accessing summary for {patient_id_str}. Session data: {dict(session)}")
+    logger.info(f"Request Cookies: {request.cookies}")
+    # --- END LOGGING ---
     try:
         # 1. Authenticate the Doctor
         doctor = get_current_user()
