@@ -3493,13 +3493,10 @@ def get_doctor_dashboard():
         if not doctor:
             return jsonify({"error": "Doctor not found"}), 404
 
-        today_start = datetime.now().date()
-        today_end = today_start + timedelta(days=1)
+        
 
         appointments = Appointment.query.filter(
-            Appointment.doctor_id == doctor.id,
-            Appointment.appointment_datetime >= today_start,
-            Appointment.appointment_datetime < today_end
+            Appointment.doctor_id == doctor.id
         ).order_by(Appointment.appointment_datetime.asc()).all()
 
         appointments_data = []
