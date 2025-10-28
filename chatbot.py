@@ -1126,7 +1126,7 @@ JSON Output:"""
 
         logger.info(f"Sending transcription to Groq LLM for structuring (Patient: {patient_id_str})...")
         llm_response = groq_llm_client.chat.completions.create(
-            model="llama3-70b-8192", # Recommend a powerful model for accuracy
+            model="llama-3.3-70b-versatile", # Recommend a powerful model for accuracy
             messages=[
                 {"role": "system", "content": "You are an assistant that extracts prescription details and outputs ONLY valid JSON."},
                 {"role": "user", "content": prompt}
