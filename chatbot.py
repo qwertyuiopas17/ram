@@ -1326,15 +1326,21 @@ def get_patient_summary_for_doctor(patient_id_str):
             prescriptions.append("Error retrieving prescription history.")
 
 
+        # --- VERIFY/ADD: Ensure they are always lists before returning ---
+        symptoms = symptoms if isinstance(symptoms, list) else []
+        vitals = vitals if isinstance(vitals, list) else []
+        prescriptions = prescriptions if isinstance(prescriptions, list) else []
+        # --- END VERIFICATION ---
+
         # 4. Return Compiled Summary
         logger.info(f"Successfully generated summary for patient {patient_id_str} for doctor {doctor.doctor_id}")
         return jsonify({
             "success": True,
             "patientName": patient.full_name,
             "patientId": patient.patient_id,
-            "symptoms": symptoms,
-            "vitals": vitals,
-            "prescriptions": prescriptions
+            "symptoms": symptoms,      # Now guaranteed to be a list
+            "vitals": vitals,          # Now guaranteed to be a list
+            "prescriptions": prescriptions # Now guaranteed to be a list
         })
 
     except Exception as e:
@@ -3770,6 +3776,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
