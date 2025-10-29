@@ -3592,7 +3592,7 @@ def get_agora_token():
              return jsonify({"success": False, "error": "Agora service not configured properly on the server."}), 503
 
         # Set role (Publisher allows sending/receiving streams)
-        role = RtcTokenBuilder.Role_Publisher
+        role = 1 
         # Calculate expiration timestamp
         current_timestamp = int(time.time())
         privilege_expired_ts = current_timestamp + TOKEN_EXPIRATION_SEC
@@ -3788,6 +3788,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
