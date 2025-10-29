@@ -3566,15 +3566,20 @@ def get_doctor_profile():
 @app.route("/v1/agora/token", methods=["POST"])
 def get_agora_token():
     """Generates an Agora RTC token for secure channel access."""
+    # --- START: ADD DETAILED LOGGING ---
+    logger.info("--- /v1/agora/token endpoint hit ---")
+    logger.info(f"Request Headers: {dict(request.headers)}") # Log all incoming headers
+    logger.info(f"Session BEFORE get_current_user: {dict(session)}") # Log session content
+    # --- END: ADD DETAILED LOGGING ---
     try:
         # --- Basic Security Check ---
-        # Ensure the user is logged in before issuing a token.
-        # You might want more specific checks (e.g., is this user part of the requested appointment?)
         user = get_current_user() # Use your existing helper
+        # --- ADD LOGGING AFTER get_current_user ---
+        logger.info(f"get_current_user returned: {user}")
+        # --- END LOGGING ---
         if not user:
-             logger.warning("Unauthorized attempt to get Agora token.")
+             logger.warning("Unauthorized attempt to get Agora token - get_current_user returned None.") # More specific log
              return jsonify({"success": False, "error": "Authentication required"}), 401
-        # --- End Security Check ---
 
         data = request.get_json() or {}
         channel_name = data.get("channelName")
@@ -3788,6 +3793,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
