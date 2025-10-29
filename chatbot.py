@@ -17,6 +17,7 @@ import uuid
 import base64
 from io import BytesIO
 import groq
+from agora_token_builder import RtcTokenBuilder, RtmTokenBuilder
 sos_events ={}
 # For simplicity, a global dictionary is used here.
 
@@ -174,7 +175,11 @@ CORS(app, supports_credentials=True, resources={
     }
 })
 
-
+# Load Agora credentials securely from environment variables
+AGORA_APP_ID = os.environ.get("AGORA_APP_ID")
+AGORA_APP_CERTIFICATE = os.environ.get("AGORA_APP_CERTIFICATE")
+# Set token expiration time in seconds (e.g., 1 hour)
+TOKEN_EXPIRATION_SEC = 3600
 # Enhanced security configuration
 app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
 app.config.update(
@@ -399,8 +404,7 @@ system_state = {
     'fallback_responses': 0
 }
 
-# WebRTC signaling messages storage (in-memory for demo)
-webrtc_messages = {}
+
 
 # Thread lock for system state updates
 state_lock = threading.Lock()
@@ -3559,50 +3563,56 @@ def get_doctor_profile():
         return jsonify({"error": "Failed to load doctor profile"}), 500
 
 
-# WebRTC signaling endpoints
-@app.route("/v1/webrtc/<message_type>", methods=["POST"])
-def webrtc_signaling(message_type):
-    """Handle WebRTC signaling messages"""
+@app.route("/v1/agora/token", methods=["POST"])
+def get_agora_token():
+    """Generates an Agora RTC token for secure channel access."""
     try:
+        # --- Basic Security Check ---
+        # Ensure the user is logged in before issuing a token.
+        # You might want more specific checks (e.g., is this user part of the requested appointment?)
+        user = get_current_user() # Use your existing helper
+        if not user:
+             logger.warning("Unauthorized attempt to get Agora token.")
+             return jsonify({"success": False, "error": "Authentication required"}), 401
+        # --- End Security Check ---
+
         data = request.get_json() or {}
-        appointment_id = data.get("appointmentId")
-        message_data = data.get("data")
+        channel_name = data.get("channelName")
+        # Use 0 for auto-assigned UID by Agora, common for simple cases.
+        # Or, you could assign specific UIDs based on user.id if needed later.
+        uid = data.get("uid", 0)
 
-        if not appointment_id or message_data is None:
-            return jsonify({"error": "appointmentId and data required"}), 400
+        # Basic validation
+        if not channel_name:
+            logger.warning("Agora token request missing channelName.")
+            return jsonify({"success": False, "error": "channelName is required"}), 400
 
-        if appointment_id not in webrtc_messages:
-            webrtc_messages[appointment_id] = []
+        if not AGORA_APP_ID or not AGORA_APP_CERTIFICATE:
+             logger.error("Agora App ID or Certificate not configured on the backend.")
+             return jsonify({"success": False, "error": "Agora service not configured properly on the server."}), 503
 
-        webrtc_messages[appointment_id].append({
-            "type": message_type,
-            "data": message_data,
-            "timestamp": datetime.now().isoformat()
-        })
+        # Set role (Publisher allows sending/receiving streams)
+        role = RtcTokenBuilder.RolePublisher
+        # Calculate expiration timestamp
+        current_timestamp = int(time.time())
+        privilege_expired_ts = current_timestamp + TOKEN_EXPIRATION_SEC
 
-        logger.info(f"WebRTC message stored: {message_type} for appointment {appointment_id}")
-        return jsonify({"success": True})
+        # --- Generate the Token ---
+        token = RtcTokenBuilder.buildTokenWithUid(
+            AGORA_APP_ID,
+            AGORA_APP_CERTIFICATE,
+            channel_name,
+            uid, # Use 0 for auto-assigned UID
+            role,
+            privilege_expired_ts
+        )
 
-    except Exception as e:
-        logger.error(f"WebRTC signaling error: {e}")
-        return jsonify({"error": "Failed to process signaling message"}), 500
-
-@app.route("/v1/webrtc/poll", methods=["GET"])
-def webrtc_poll():
-    """Poll for WebRTC signaling messages"""
-    try:
-        appointment_id = request.args.get("appointmentId")
-        if not appointment_id:
-            return jsonify([])
-
-        messages = webrtc_messages.get(appointment_id, [])
-        # Return messages and clear them after sending
-        webrtc_messages[appointment_id] = []
-        return jsonify(messages)
+        logger.info(f"Generated Agora RTC token for user {user.id} (UID: {uid}) joining channel: {channel_name}")
+        return jsonify({"success": True, "token": token})
 
     except Exception as e:
-        logger.error(f"WebRTC poll error: {e}")
-        return jsonify({"error": "Failed to poll messages"}), 500
+        logger.error(f"❌ Error generating Agora token: {e}", exc_info=True)
+        return jsonify({"success": False, "error": "Failed to generate Agora token due to a server error."}), 500
 
 
 # Scheduled tasks and cleanup
@@ -3778,6 +3788,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
