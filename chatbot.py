@@ -18,6 +18,7 @@ import base64
 from io import BytesIO
 import groq
 from agora_token_builder import RtcTokenBuilder, RtmTokenBuilder
+from werkzeug.middleware.proxy import ProxyFix
 sos_events ={}
 # For simplicity, a global dictionary is used here.
 
@@ -158,6 +159,7 @@ else:
 # Initialize Flask application with enhanced configuration
 app = Flask(__name__)
 # Enhanced CORS configuration for better compatibility
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 CORS(app, supports_credentials=True, resources={
     r"/*": {  # Covers ALL routes including /v1/*
         "origins": [
@@ -3793,6 +3795,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
