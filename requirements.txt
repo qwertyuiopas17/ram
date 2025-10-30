@@ -35,7 +35,8 @@ gevent
 
 gevent-websocket==0.10.1
 agora-token-builder
-Werkzeug
+werkzeug>=2.0
+
 
 
 
