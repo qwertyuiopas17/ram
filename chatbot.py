@@ -2094,6 +2094,18 @@ def predict():
             history = initialize_ai_components._conversation_memory.get_conversation_context(current_user.patient_id, turns=8)
         else:
             history = []
+        # --- FIX: Extract language and urgency from NLU and add it to the AI context ---
+        detected_language = nlu_understanding.get('language_detected', 'en') # Default to 'en'
+        detected_urgency = nlu_understanding.get('urgency_level', 'low')   # Default to 'low'
+
+        # Use primary_intent determined *after* state management for the context
+        context = {
+            "user_intent": primary_intent, 
+            "context_history": history,
+            "language": detected_language,      # <-- THIS IS THE FIX
+            "urgency_level": detected_urgency   # <-- THIS IS THE FIX
+        }
+        # --- END OF FIX ---
         # Use primary_intent determined *after* state management for the context
         context = {"user_intent": primary_intent, "context_history": history}
 
@@ -3795,6 +3807,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
