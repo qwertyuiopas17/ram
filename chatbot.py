@@ -1840,6 +1840,8 @@ def _get_or_create_symptom_context(user_id: str, initial_symptom: Optional[str] 
 # In chatbot.py
 # In chatbot.py
 
+# In chatbot.py
+
 @app.route("/v1/predict", methods=["POST"])
 def predict():
     """
@@ -1873,6 +1875,16 @@ def predict():
             task_in_progress = None
 
         nlu_understanding = nlu_processor.understand_user_intent(user_message, sehat_sahara_mode=True)
+        
+        # --- FIX 1: Persist Detected Language ---
+        # This addresses Root Cause Analysis Problem 1
+        detected_lang = nlu_understanding.get('language_detected', 'hi')
+        if current_user and current_user.preferred_language != detected_lang:
+            logger.info(f"Updating user {current_user.patient_id} preferred language from '{current_user.preferred_language}' to '{detected_lang}'")
+            current_user.preferred_language = detected_lang
+            db.session.add(current_user) # Add to session, will be committed with the ConversationTurn
+        # --- END OF FIX 1 ---
+        
         primary_intent = nlu_understanding.get('primary_intent', 'general_inquiry')
 
         # FLEXIBLE STATE MANAGEMENT: Check if the user's new intent is unrelated to the current task.
@@ -2094,20 +2106,16 @@ def predict():
             history = initialize_ai_components._conversation_memory.get_conversation_context(current_user.patient_id, turns=8)
         else:
             history = []
-        # --- FIX: Extract language and urgency from NLU and add it to the AI context ---
-        detected_language = nlu_understanding.get('language_detected', 'en') # Default to 'en'
-        detected_urgency = nlu_understanding.get('urgency_level', 'low')   # Default to 'low'
-
-        # Use primary_intent determined *after* state management for the context
+            
+        # --- FIX 2: Pass Detected Language to AI ---
+        # This addresses Root Cause Analysis Problem 2
+        # We use the 'detected_lang' variable from Fix 1
         context = {
             "user_intent": primary_intent, 
             "context_history": history,
-            "language": detected_language,      # <-- THIS IS THE FIX
-            "urgency_level": detected_urgency   # <-- THIS IS THE FIX
+            "language": detected_lang 
         }
-        # --- END OF FIX ---
-        # Use primary_intent determined *after* state management for the context
-        context = {"user_intent": primary_intent, "context_history": history}
+        # --- END OF FIX 2 ---
 
         action_payload = None
         if sehat_sahara_client and sehat_sahara_client.is_available:

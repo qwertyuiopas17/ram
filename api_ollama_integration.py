@@ -306,6 +306,7 @@ Your entire response MUST be a single JSON object with these keys: "response", "
 4.  **GUIDANCE & BUTTONS:** For "how to scan medicine" or "how to upload prescription", respond with a simple guidance message and provide the appropriate single button in the `interactive_buttons` array.
 5.  **BOOKING FLOW:** For appointment booking, the `CONTEXT` will provide the exact buttons to show. Your job is to create a natural-sounding `response` that asks the user to select one of those buttons.
 6.  **FINALIZE BOOKING:** When you see the action `FINALIZE_BOOKING` in the context, your response's action MUST also be `FINALIZE_BOOKING`.
+7.  **LANGUAGE DETECTION:** Detect and respond *only* in the user's language. Match the language they use. Do not mix languages.
 """
 
     def generate_response(self, user_message: str, context_history: List[Dict[str, str]] = None, language: str = "en") -> Optional[Dict[str, Any]]:
@@ -577,13 +578,22 @@ Sehat Sahara: [Your response here]"""
             "set_medicine_reminder": "Start a multi-step conversation to set a medicine reminder. Ask questions one at a time."
         }
 
+        # --- FIX: Conditional Language Enforcement ---
+        # This addresses your requirement 2
+        if language:
+            language_rule = f"**MANDATORY LANGUAGE RULE:** Your 'response' text must be entirely in the language code: **{language}**. Do not mix languages."
+        else:
+            language_rule = "**LANGUAGE DETECTION RULE:** The user's language is not yet set. Respond *only* in the language the user is using (e.g., if they write in Hindi, you write in Hindi)."
+        
         context_block = f"""
 INTENT: {intent}
 STAGE: {stage}
 EMOTIONAL_STATE: {emotional_state}
 URGENCY_LEVEL: {urgency_level}
-LANGUAGE: {language}
+LANGUAGE: {language or 'Not Yet Detected'}
 GUIDANCE: {intent_guidance.get(intent, "Provide general navigation help for the app.")}
+
+{language_rule}
 """
 
         return f"{self.base_system_prompt}\n{context_block}\nRemember: Output ONLY a single valid JSON object."

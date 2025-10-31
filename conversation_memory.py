@@ -11,13 +11,14 @@ from dataclasses import dataclass, field
 from collections import defaultdict, deque
 import pytz
 from enhanced_database_models import User, db, KeyValueStore
+
 @dataclass
 class UserProfile:
     """Enhanced user profile for Sehat Sahara Health Assistant with progress tracking"""
     user_id: str
     patient_id: str = ""
     full_name: str = ""
-    preferred_language: str = "hi"  # hi, pa, en
+    preferred_language: Optional[str] = None  # hi, pa, en
     location: str = ""
 
     # Conversation tracking
@@ -91,7 +92,7 @@ class UserProfile:
             user_id=data.get('user_id', ''),
             patient_id=data.get('patient_id', ''),
             full_name=data.get('full_name', ''),
-            preferred_language=data.get('preferred_language', 'hi'),
+            preferred_language=data.get('preferred_language'),
             location=data.get('location', ''),
             conversation_history=data.get('conversation_history', []),
             current_session_id=data.get('current_session_id', ''),
@@ -172,7 +173,7 @@ class ProgressiveConversationMemory:
                 user_id=user_id,
                 patient_id=kwargs.get('patient_id', user_id), # Use user_id as fallback
                 full_name=kwargs.get('full_name', ''),
-                preferred_language=kwargs.get('preferred_language', 'hi'),
+                preferred_language=kwargs.get('preferred_language', None),
                 location=kwargs.get('location', '')
                 )
             self.logger.info(f"Created new user profile for: {user_id}")
@@ -190,6 +191,13 @@ class ProgressiveConversationMemory:
         """Add a conversation turn to user's history"""
         
         profile = self.create_or_get_user(user_id)
+        # --- FIX: Persist the first-ever detected language ---
+        # This addresses your requirement 1
+        detected_lang = nlu_result.get('language_detected')
+        if detected_lang and profile.preferred_language is None:
+            profile.preferred_language = detected_lang
+            self.logger.info(f"Persisted first detected language '{detected_lang}' for user {user_id}")
+        # --- END OF FIX ---
         
         # Create conversation turn
         turn = {

@@ -970,6 +970,14 @@ Consider:
         # Immediate check for out of scope content using AI if available
         if self._is_out_of_scope(cleaned_message):
             return self._generate_out_of_scope_response()
+        # --- FIX: Force full analysis for first message (even if short) ---
+        # This addresses your requirement 3
+        if len(cleaned_message.split()) <= 4 and conversation_history:
+            # Only handle short messages using history if history *exists*
+            self.logger.info(f"🔄 Using short-message history-based NLU for: '{cleaned_message[:50]}...'")
+            return self._handle_short_message_enhanced(cleaned_message, excluded_intents, conversation_history)
+        # --- END OF FIX ---
+        # (The code will now proceed to full AI/keyword analysis for short *first* messages
 
         # Primary: OpenRouter AI-powered classification with multilingual understanding
         if self.use_openrouter and hasattr(self, 'intent_descriptions'):
@@ -1299,7 +1307,7 @@ Consider:
         if max_score > 0:
             return best_language
         else:
-            return 'en'  # Default fallback
+            return None  # Default fallback
 
     def _identify_user_needs(self, primary_intent: str) -> List[str]:
         """Identifies user needs based on intent."""
