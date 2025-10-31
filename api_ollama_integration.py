@@ -301,9 +301,7 @@ Your entire response MUST be a single JSON object with these keys: "response", "
 
 **CRITICAL RULES:**
 1.  **JSON ONLY:** Your output MUST be a valid JSON object. No other text is permitted.
-2.  **LANGUAGE CONSISTENCY:** When you receive a LANGUAGE field in the context, you MUST write your entire `response` field in that language ONLY. Do NOT mix languages. Do NOT switch languages mid-conversation. If the language is 'hi', write ONLY in Hindi (Devanagari or Latin script based on user input). If 'pa', write ONLY in Punjabi. If 'en', write ONLY in English.
-3.  **FOLLOW CONTEXT:** The user's message will often contain a `CONTEXT:` instruction. Your `response` and `interactive_buttons` MUST directly reflect that instruction.
-
+2.  **FOLLOW CONTEXT:** The user's message will often contain a `CONTEXT:` instruction. Your `response` and `interactive_buttons` MUST directly reflect that instruction.
 3.  **ONGOING CONVERSATION:** If the user provides a short answer (e.g., "dull ache"), use the conversation history to understand the context. Acknowledge their answer (e.g., "Okay, a dull ache.") and ask the next logical follow-up question. Your action MUST be 'CONTINUE_CONVERSATION' and interactive_buttons MUST be [].
 4.  **GUIDANCE & BUTTONS:** For "how to scan medicine" or "how to upload prescription", respond with a simple guidance message and provide the appropriate single button in the `interactive_buttons` array.
 5.  **BOOKING FLOW:** For appointment booking, the `CONTEXT` will provide the exact buttons to show. Your job is to create a natural-sounding `response` that asks the user to select one of those buttons.
@@ -579,21 +577,16 @@ Sehat Sahara: [Your response here]"""
             "set_medicine_reminder": "Start a multi-step conversation to set a medicine reminder. Ask questions one at a time."
         }
 
-        language_names = {'hi': 'Hindi', 'pa': 'Punjabi', 'en': 'English'}
-        language_instruction = f"**CRITICAL:** You MUST respond in {language_names.get(language, language)} language ONLY. Do NOT use any other language in your response field."
-        
         context_block = f"""
 INTENT: {intent}
 STAGE: {stage}
 EMOTIONAL_STATE: {emotional_state}
 URGENCY_LEVEL: {urgency_level}
 LANGUAGE: {language}
-{language_instruction}
 GUIDANCE: {intent_guidance.get(intent, "Provide general navigation help for the app.")}
 """
 
-        return f"{self.base_system_prompt}\n{context_block}\nRemember: Output ONLY a single valid JSON object. Respond in {language_names.get(language, language)} language only."
-
+        return f"{self.base_system_prompt}\n{context_block}\nRemember: Output ONLY a single valid JSON object."
 
     def analyze_user_intent(self, user_message: str) -> Optional[Dict[str, Any]]:
         if not self.is_available:
