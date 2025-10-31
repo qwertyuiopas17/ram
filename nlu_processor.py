@@ -966,6 +966,16 @@ Consider:
         Falls back to enhanced keyword-based system if AI classification fails.
         """
         cleaned_message = self._clean_and_preprocess(user_message)
+        preliminary_language = self._detect_language(cleaned_message)
+        if preliminary_language == 'context_needed' and conversation_history:
+        # Get language from most recent turn
+            for turn in reversed(conversation_history[-3:]):
+                if isinstance(turn, dict) and turn.get('language'):
+                    preliminary_language = turn['language']
+                    self.logger.info(f"Short message detected, using context language: {preliminary_language}")
+                    break
+            if preliminary_language == 'context_needed':
+                preliminary_language = 'hi'  # Final fallback
 
         # Immediate check for out of scope content using AI if available
         if self._is_out_of_scope(cleaned_message):
@@ -976,8 +986,11 @@ Consider:
             self.logger.info(f"🔬 Using OpenRouter AI-powered NLU for message: '{cleaned_message[:50]}...'")
             ai_result = self._ai_powered_classification(cleaned_message, conversation_history)
 
-            if ai_result and ai_result['confidence'] > 0.6:  # Confidence threshold for AI classification
+            if ai_result and ai_result['confidence'] > 0.6:
                 self.logger.info(f"✅ OpenRouter AI classification successful: {ai_result['primary_intent']} ({ai_result['confidence']:.2f})")
+                # Override language if we determined it from context
+                if preliminary_language != 'context_needed' and preliminary_language != ai_result.get('language_detected'):
+                    ai_result['language_detected'] = preliminary_language
                 final_result = self._compile_enhanced_final_analysis(ai_result, cleaned_message, sehat_sahara_mode)
 
                 # Add function/button display information
@@ -1240,24 +1253,10 @@ Consider:
 
         word_count = len(message.split())
         if word_count <= 3:
-            # Check for definitive language markers
-            hindi_markers = ['hai', 'kya', 'nahi', 'chahiye', 'karna', 'mera', 'meri', 'tera', 'teri']
-            punjabi_markers = ['hai', 'ki', 'nahin', 'chahidi', 'karna', 'mera', 'meri', 'tera', 'teri', 'kado', 'kithe', 'kive']
-            english_markers = ['the', 'is', 'are', 'do', 'have', 'my', 'i', 'you', 'this', 'that', 'what', 'how', 'when', 'where', 'why']
-
-            # Count exact word matches
-            hi_count = sum(1 for word in message_lower.split() if word in hindi_markers)
-            pa_count = sum(1 for word in message_lower.split() if word in punjabi_markers)
-            en_count = sum(1 for word in message_lower.split() if word in english_markers)
-
-            if hi_count > pa_count and hi_count > en_count:
-                return 'hi'
-            elif pa_count > hi_count and pa_count > en_count:
-                return 'pa'
-            elif en_count > 0:
-                return 'en'
-            else:
-                return 'en'  # Default for ambiguous short messages
+            # For very short messages, return 'context_needed' signal
+        # This will be handled by conversation memory to use previous language
+            return 'context_needed'
+           
 
         keyword_scores = {'en': 0, 'hi': 0, 'pa': 0}
 

@@ -179,25 +179,36 @@ class ProgressiveConversationMemory:
     
     # Always return the existing or newly created profile
         return self.user_profiles[user_id]
+    def get_user_language(self, user_id: str) -> str:
+        """Get the user's preferred/detected language"""
+        if user_id in self.user_profiles:
+            return self.user_profiles[user_id].preferred_language
+        return 'hi'  # Default to Hindi
+
     
     def add_conversation_turn(self,
-                             user_id: str,
-                             user_message: str,
-                             bot_response: str,
-                             nlu_result: Dict[str, Any],
-                             action_taken: str = None,
-                             session_id: str = None) -> None:
+                         user_id: str,
+                         user_message: str,
+                         bot_response: str,
+                         nlu_result: Dict[str, Any],
+                         action_taken: str = None,
+                         session_id: str = None) -> None:
         """Add a conversation turn to user's history"""
-        
         profile = self.create_or_get_user(user_id)
-        
-        # Create conversation turn
+    
+    # CRITICAL FIX: Update user's preferred language from detected language
+        detected_language = nlu_result.get('language_detected', profile.preferred_language)
+        if detected_language and detected_language in ['hi', 'pa', 'en']:
+            profile.preferred_language = detected_language
+            self.logger.info(f"Updated user {user_id} preferred language to: {detected_language}")
+    
+    # Create conversation turn
         turn = {
             'timestamp': datetime.now().isoformat(),
             'user_message': user_message,
             'bot_response': bot_response,
             'intent': nlu_result.get('primary_intent', 'unknown'),
-            'language': nlu_result.get('language_detected', 'hi'),
+            'language': profile.preferred_language,  # Use persisted language
             'urgency_level': nlu_result.get('urgency_level', 'low'),
             'action_taken': action_taken,
             'session_id': session_id or profile.current_session_id
