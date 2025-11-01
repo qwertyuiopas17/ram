@@ -1432,12 +1432,15 @@ def doctor_create_digital_prescription():
         logger.error(f"❌ Error in doctor_create_digital_prescription: {e}", exc_info=True)
         db.session.rollback()
         return jsonify({"success": False, "message": "Failed to save digital prescription."}), 500
-    
-# In chatbot.py (replace the existing doctor_upload_prescription_image function with this)
+
+# In chatbot.py, REPLACE your entire 'doctor_upload_prescription_image' function with this one:
 
 @app.route("/v1/doctor/upload-prescription", methods=["POST"])
 def doctor_upload_prescription_image():
-    """Handles the doctor uploading a prescription image file WITHOUT AI analysis."""
+    """
+    Handles the doctor uploading a prescription image file WITH AI analysis.
+    (This function is now fixed to match the patient's upload logic)
+    """
     try:
         doctor = get_current_user()
         if not doctor or not isinstance(doctor, Doctor):
@@ -1469,11 +1472,23 @@ def doctor_upload_prescription_image():
             logger.error(f"Invalid Base64 image data received: {decode_error}")
             return jsonify({"success": False, "message": "Invalid image data format."}), 400
 
-        # --- AI Analysis Removed ---
+        # --- START OF FIX: Added AI Analysis Block ---
+        extracted_data = None
+        if groq_scout and groq_scout.is_available:
+            logger.info(f"Sending doctor's upload for patient {patient_id_str} to AI analysis...")
+            extracted_data = groq_scout.interpret_prescription_image(image_data_base64, language="en")
+            logger.info(f"AI extracted prescription data: {extracted_data}")
+        
+        # Prepare prescription data from AI (or use defaults)
+        doctor_name_from_ai = extracted_data.get('doctor_name') if extracted_data else None
+        medications = extracted_data.get('medications', []) if extracted_data else []
+        tests = extracted_data.get('tests', []) if extracted_data else []
+        diagnosis = extracted_data.get('diagnosis', '') if extracted_data else ''
+        # --- END OF FIX ---
 
-        # Determine details for the record using only the current doctor
-        record_title = f"Prescription from Dr. {doctor.full_name}"
-        description = "Uploaded prescription image by doctor." # Tag source
+        # Determine details for the record
+        record_title = f"Prescription from Dr. {doctor_name_from_ai or doctor.full_name}"
+        description = f"Uploaded prescription image by doctor. Diagnosis: {diagnosis}" if diagnosis else "Uploaded prescription image by doctor."
 
         # Create HealthRecord
         record = HealthRecord(
@@ -1481,8 +1496,8 @@ def doctor_upload_prescription_image():
             record_type='prescription',
             title=record_title,
             description=description,
-            file_type='image/jpeg', # Assuming JPEG
-            image_data=image_data_base64, # Store clean base64
+            file_type='image/jpeg',
+            image_data=image_data_base64,
             test_date=datetime.now().date()
         )
 
@@ -1490,39 +1505,47 @@ def doctor_upload_prescription_image():
         db.session.commit()
         logger.info(f"✅ Doctor prescription image uploaded for Patient {patient_id_str} (Record ID: {record.id}).")
 
-        # Optionally add basic info to conversation memory (without AI fields)
-        summary_response_text = "Prescription image saved. Summary unavailable without AI analysis."
+        # --- START OF FIX: Update Conversation Memory with AI data ---
+        prescription_data = {
+            'prescription_id': record.record_id,
+            'doctor_name': doctor_name_from_ai or doctor.full_name,
+            'medications': medications, # Pass the (potentially empty) list
+            'diagnosis': diagnosis,
+            'instructions': '', # AI model v1 doesn't extract this well yet
+            'source': 'Uploaded by doctor',
+            'upload_method': 'doctor_upload_image',
+            'ai_extracted': extracted_data is not None
+        }
+        
+        summary_response_text = "Prescription image saved."
         if conversation_memory:
-            prescription_data = {
-                'prescription_id': record.record_id,
-                'doctor_name': doctor.full_name, # Use current doctor's name
-                'medications': [], # No AI extraction
-                'diagnosis': '', # No AI extraction
-                'instructions': '', # No AI extraction
-                'source': 'Uploaded by doctor', # Source tag
-                'upload_method': 'doctor_upload_image', # Method tag
-                'ai_extracted': False # Mark as not AI extracted
-             }
             try:
                 conversation_memory.add_prescription_summary(user.patient_id, prescription_data)
-                # Generate a simple confirmation, as no details were extracted
-                summary_response_text = f"Dr. {doctor.full_name} uploaded a prescription image for you."
-                logger.info(f"Updated conversation memory (basic info) for uploaded image (Patient: {patient_id_str}).")
+                # This will now trigger the auto-reminder generation
+                
+                # Generate a simple confirmation
+                if medications:
+                    summary_response_text = f"Dr. {doctor.full_name} uploaded a prescription with {len(medications)} medicine(s)."
+                else:
+                    summary_response_text = f"Dr. {doctor.full_name} uploaded a prescription image for you."
+                
+                logger.info(f"Updated conversation memory (with AI data) for uploaded image (Patient: {patient_id_str}).")
 
             except Exception as mem_e:
                 logger.error(f"Error updating conversation memory for uploaded image: {mem_e}", exc_info=True)
                 summary_response_text = "Memory update failed."
+        # --- END OF FIX ---
 
         return jsonify({
             "success": True,
-            "message": "Prescription image uploaded successfully. AI analysis was skipped.",
+            "message": "Prescription image uploaded successfully and analyzed.",
             "recordId": record.record_id,
-            "extractedData": None, # Indicate no AI data
-            "formatted_response": summary_response_text # Send back basic confirmation text
+            "extractedData": extracted_data, # Return AI data
+            "formatted_response": summary_response_text
         })
 
     except Exception as e:
-        logger.error(f"❌ Error in doctor_upload_prescription_image (no AI): {e}", exc_info=True)
+        logger.error(f"❌ Error in doctor_upload_prescription_image (with AI): {e}", exc_info=True)
         db.session.rollback()
         return jsonify({"success": False, "message": "Failed to upload prescription image."}), 500
        
@@ -3870,6 +3893,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
