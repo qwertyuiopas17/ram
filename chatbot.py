@@ -3237,7 +3237,41 @@ def search_medicines():
         logger.error(f"Search medicines error: {e}")
         update_system_state('search_medicines', success=False)
         return jsonify({"success": False, "message": "Failed to search medicines"}), 500
+# In chatbot.py, add this new function
 
+@app.route("/v1/orders/history", methods=["GET"])
+def get_order_history():
+    """Fetches all past medicine orders for a user."""
+    try:
+        current_user = get_current_user()
+        if not current_user:
+            user_id_param = request.args.get('userId')
+            if user_id_param:
+                current_user = User.query.filter_by(patient_id=user_id_param).first()
+        
+        if not current_user:
+            return jsonify({"success": False, "message": "Authentication required"}), 401
+        
+        orders = MedicineOrder.query.filter_by(user_id=current_user.id).order_by(MedicineOrder.created_at.desc()).all()
+        
+        orders_data = []
+        for order in orders:
+            pharmacy = Pharmacy.query.get(order.pharmacy_id)
+            orders_data.append({
+                "id": order.order_id,
+                "items": order.get_items(),
+                "total": order.total_amount,
+                "status": order.status,
+                "date": order.created_at.isoformat(),
+                "pharmacyName": pharmacy.name if pharmacy else "Unknown Pharmacy"
+            })
+        
+        return jsonify({"success": True, "orders": orders_data})
+    
+    except Exception as e:
+        logger.error(f"❌ Get order history error: {e}", exc_info=True)
+        return jsonify({"success": False, "message": "Failed to retrieve order history"}), 500
+        
 @app.route("/v1/orders", methods=["POST"])
 def place_order():
     """Place a medicine order with robust authentication and validation."""
@@ -3280,6 +3314,27 @@ def place_order():
 
         db.session.add(order)
         db.session.commit()
+        # --- START OF FIX: Add this block ---
+        # After saving the order, create a corresponding HealthRecord
+        try:
+            record_title = f"Medicine Order Placed ({pharmacy.name})"
+            record_description = f"Order ID: {order.order_id}. Total: ₹{order.total_amount:.2f}. {len(items)} item(s) ordered."
+            
+            new_record = HealthRecord(
+                user_id=current_user.id,
+                record_type='medicine_order', # Use a specific type
+                title=record_title,
+                description=record_description,
+                file_type='text/plain',
+                test_date=datetime.now().date()
+            )
+            db.session.add(new_record)
+            db.session.commit()
+            logger.info(f"✅ Created HealthRecord for order {order.order_id}")
+        except Exception as record_e:
+            logger.error(f"❌ Failed to create HealthRecord for order {order.order_id}: {record_e}")
+            db.session.rollback() # Rollback the record, but the order is already saved.
+        # --- END OF FIX ---
 
         logger.info(f"✅ Order {order.order_id} placed by user {current_user.patient_id} at {pharmacy.name}")
         return jsonify({
@@ -3815,6 +3870,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
