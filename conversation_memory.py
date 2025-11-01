@@ -877,7 +877,7 @@ class ProgressiveConversationMemory:
                 'start_date': datetime.now().strftime('%Y-%m-%d'),
                 'instructions': med.get('time', 'As directed by your doctor.'),
                 'source': 'prescription_upload', # To identify auto-generated reminders
-                'reminder_enabled': False, # User must manually enable it
+                'reminder_enabled': True, # User must manually enable it
                 'created_at': datetime.now().isoformat()
             }
 
@@ -917,3 +917,4 @@ class ProgressiveConversationMemory:
 
 # Global instance for easy import
 conversation_memory = ProgressiveConversationMemory()
+
