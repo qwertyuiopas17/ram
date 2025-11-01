@@ -251,6 +251,14 @@ def check_and_send_reminders():
     """The background job that checks for due reminders, sends push notifications, and reschedules."""
     # --- ADDED: Ensure app context for database operations ---
     with app.app_context():
+        try:
+            if not conversation_memory.load_from_file(os.path.join(models_path, 'conversation_memory.json')):
+                logger.error("Failed to load conversation memory in reminder job. Aborting check.")
+                return # Cannot proceed without memory
+        except Exception as load_e:
+            logger.error(f"Failed to load memory in reminder job: {load_e}")
+            return
+            # --- END OF FIX ---
         # --- ADDED: Load memory at the start of the job ---
         #memory_loaded = conversation_memory.load_from_file(os.path.join(models_path, 'conversation_memory.json'))
         #if not memory_loaded:
@@ -3901,6 +3909,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
