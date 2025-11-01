@@ -252,10 +252,10 @@ def check_and_send_reminders():
     # --- ADDED: Ensure app context for database operations ---
     with app.app_context():
         # --- ADDED: Load memory at the start of the job ---
-        memory_loaded = conversation_memory.load_from_file(os.path.join(models_path, 'conversation_memory.json'))
-        if not memory_loaded:
-             logger.error("Failed to load conversation memory in reminder job. Aborting check.")
-             return # Cannot proceed without memory
+        #memory_loaded = conversation_memory.load_from_file(os.path.join(models_path, 'conversation_memory.json'))
+        #if not memory_loaded:
+             #logger.error("Failed to load conversation memory in reminder job. Aborting check.")
+             #return # Cannot proceed without memory
 
         try:
             now_utc = datetime.now(timezone.utc)
@@ -3815,6 +3815,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
