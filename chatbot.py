@@ -3504,6 +3504,14 @@ def upload_prescription():
             # Add to conversation memory for reminder generation
             if hasattr(initialize_ai_components, '_conversation_memory'):
                 initialize_ai_components._conversation_memory.add_prescription_summary(user.patient_id, prescription_data)
+                # --- START OF FIX ---
+                # Add this block to save the memory to the database
+                try:
+                    conversation_memory.save_to_file(os.path.join(models_path, 'conversation_memory.json'))
+                    logger.info(f"✅ Saved memory after auto-generating reminders for {user.patient_id}")
+                except Exception as save_e:
+                    logger.error(f"❌ Failed to save memory after prescription upload: {save_e}")
+                # --- END OF FIX ---
 
             logger.info(f"✅ Auto-generated medicine reminders for user {user.patient_id}")
 
@@ -3893,6 +3901,7 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
 
 
 
