@@ -511,38 +511,46 @@ class ProgressiveConversationMemory:
     
     def save_to_file(self, filepath: str) -> bool:
         """Saves conversation memory to the database."""
+        from chatbot import app
         try:
-            json_string = json.dumps({
-                'user_profiles': {uid: profile.to_dict() for uid, profile in self.user_profiles.items()}
-                })
-            record = KeyValueStore.query.filter_by(key='conversation_memory').first()
-            if record:
-                record.value = json_string
-            else:
-                record = KeyValueStore(key='conversation_memory', value=json_string)
-                db.session.add(record)
+            with app.app_context():
+                json_string = json.dumps({
+                    'user_profiles': {uid: profile.to_dict() for uid, profile in self.user_profiles.items()}
+                    })
+                record = KeyValueStore.query.filter_by(key='conversation_memory').first()
+                if record:
+                    record.value = json_string
+                else:
+                    record = KeyValueStore(key='conversation_memory', value=json_string)
+                    db.session.add(record)
         
-            db.session.commit()
-            self.logger.info("Conversation memory saved to DATABASE.")
-            return True
+                db.session.commit()
+                self.logger.info("Conversation memory saved to DATABASE.")
+                return True
         except Exception as e:
             self.logger.error(f"Error saving conversation memory to database: {e}")
-            db.session.rollback()
+            with app.app_context():
+                db.session.rollback()
             return False
     
+    # In conversation_memory(7).py
+
     def load_from_file(self, filepath: str) -> bool:
         """Load conversation memory from file"""
+        from chatbot import app # <--- ADD THIS IMPORT
         try:
-            record = KeyValueStore.query.filter_by(key='conversation_memory').first()
-            if record:
-                data = json.loads(record.value)
-                self.user_profiles = {}
-                for uid, profile_data in data.get('user_profiles', {}).items():
-                    self.user_profiles[uid] = UserProfile.from_dict(profile_data)
-                self.logger.info("Conversation memory loaded from DATABASE.")
-            else:
-                self.logger.warning("No conversation memory found in database. Starting fresh.")
-            return True
+            with app.app_context(): # <--- WRAP in with app.app_context()
+                record = KeyValueStore.query.filter_by(key='conversation_memory').first()
+                if record:
+                    data = json.loads(record.value)
+                    self.user_profiles = {}
+                    for uid, profile_data in data.get('user_profiles', {}).items():
+                        self.user_profiles[uid] = UserProfile.from_dict(profile_data)
+                    self.logger.info("Conversation memory loaded from DATABASE.")
+                else:
+                    self.logger.warning("No conversation memory found in database. Starting fresh.")
+                    self.user_profiles = {}
+                return True
         except Exception as e:
             self.logger.error(f"Error loading conversation memory from database: {e}")
             return False
@@ -868,6 +876,13 @@ class ProgressiveConversationMemory:
             # Default if no time is found
             if not times:
                 times.append("09:00") # Default to a morning reminder
+            next_alert_utc = None
+            if times:
+                # We don't have the user's timezone here, so we'll default to UTC
+                # as a reliable standard for an automated feature.
+                user_timezone = "UTC" 
+                next_alert_utc = self._calculate_next_utc_timestamp(times, user_timezone)
+            # --- END OF FIX ---
 
             reminder = {
                 'medicine_name': med_name,
@@ -878,7 +893,8 @@ class ProgressiveConversationMemory:
                 'instructions': med.get('time', 'As directed by your doctor.'),
                 'source': 'prescription_upload', # To identify auto-generated reminders
                 'reminder_enabled': True, # User must manually enable it
-                'created_at': datetime.now().isoformat()
+                'created_at': datetime.now().isoformat(),
+                'next_alert_utc': next_alert_utc
             }
 
             profile.medicine_reminders.append(reminder)
