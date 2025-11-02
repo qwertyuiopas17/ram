@@ -251,14 +251,6 @@ def check_and_send_reminders():
     """The background job that checks for due reminders, sends push notifications, and reschedules."""
     # --- ADDED: Ensure app context for database operations ---
     with app.app_context():
-        try:
-            if not conversation_memory.load_from_file(os.path.join(models_path, 'conversation_memory.json')):
-                logger.error("Failed to load conversation memory in reminder job. Aborting check.")
-                return # Cannot proceed without memory
-        except Exception as load_e:
-            logger.error(f"Failed to load memory in reminder job: {load_e}")
-            return
-            # --- END OF FIX ---
         # --- ADDED: Load memory at the start of the job ---
         #memory_loaded = conversation_memory.load_from_file(os.path.join(models_path, 'conversation_memory.json'))
         #if not memory_loaded:
@@ -1565,16 +1557,6 @@ def manage_medicine_reminders():
     try:
         if not conversation_memory:
             return jsonify({"error": "Service unavailable."}), 503
-        # --- START OF FIX ---
-        # Force-load the memory from the database at the start of the request
-        # This ensures this worker has the absolute latest data saved by *other* workers
-        try:
-            conversation_memory.load_from_file(os.path.join(models_path, 'conversation_memory.json'))
-            logger.info(f"Refreshed conversation memory from DB for /v1/medicine-reminders")
-        except Exception as load_e:
-            logger.error(f"Failed to refresh memory in medicine-reminders: {load_e}")
-            # Don't fail the request, just proceed with (potentially) stale memory
-        # --- END OF FIX ---
 
         data = request.get_json() or {}
         user_id = data.get("userId", "").strip()
@@ -1892,14 +1874,6 @@ def predict():
     try:
         start_time = time.time()
         update_system_state('predict')
-        # --- START OF FIX ---
-        # Force-load the memory from the database at the start of *every* chat message.
-        try:
-            conversation_memory.load_from_file(os.path.join(models_path, 'conversation_memory.json'))
-        except Exception as load_e:
-            logger.error(f"Failed to refresh memory in /predict: {load_e}")
-            # Proceed with stale memory, but log the error
-        # --- END OF FIX ---
 
         data = request.get_json() or {}
         user_message = (data.get("message") or "").strip()
@@ -3530,14 +3504,6 @@ def upload_prescription():
             # Add to conversation memory for reminder generation
             if hasattr(initialize_ai_components, '_conversation_memory'):
                 initialize_ai_components._conversation_memory.add_prescription_summary(user.patient_id, prescription_data)
-                # --- START OF FIX ---
-                # Add this block to save the memory to the database
-                try:
-                    conversation_memory.save_to_file(os.path.join(models_path, 'conversation_memory.json'))
-                    logger.info(f"✅ Saved memory after auto-generating reminders for {user.patient_id}")
-                except Exception as save_e:
-                    logger.error(f"❌ Failed to save memory after prescription upload: {save_e}")
-                # --- END OF FIX ---
 
             logger.info(f"✅ Auto-generated medicine reminders for user {user.patient_id}")
 
@@ -3927,36 +3893,3 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
