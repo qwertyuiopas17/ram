@@ -311,7 +311,7 @@ def check_and_send_reminders():
                                     
                                     # 2. Custom sound file (must be in your static folder)
                                     # In chatbot.py
-                                    "sound": "https://saharasaathi.netlify.app/static/sounds/alarm.mp3", 
+                                    "sound": "https://saharasaathi.netlify.app/static/sound/alarm.mp3", 
                                     
                                     # 3. (Recommended) Keep notification on screen until user interacts
                                     "requireInteraction": True, 
