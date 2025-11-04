@@ -20,6 +20,9 @@ import groq
 from agora_token_builder import RtcTokenBuilder, RtmTokenBuilder
 from werkzeug.middleware.proxy_fix import ProxyFix
 import requests
+
+from pydub import AudioSegment
+
 sos_events ={}
 # For simplicity, a global dictionary is used here.
 
@@ -386,11 +389,19 @@ def call_bhashini_pipeline(task_list, input_data, source_lang, target_lang=None)
 # IN: chatbot.py
 # ADD THIS ENTIRE NEW ROUTE
 #
+#
+# IN: chatbot.py
+# REPLACE your @app.route("/v1/voice-input", ...) with this new version
+#
+#
+# IN: chatbot.py
+# REPLACE your @app.route("/v1/voice-input", ...) with this new version
+#
 @app.route("/v1/voice-input", methods=["POST"])
 def voice_input():
     """
     Handles VOICE-BASED chat messages.
-    Orchestrates the full Bhashini STT -> NMT -> Llama -> NMT -> TTS pipeline.
+    Converts WEBM to WAV, then orchestrates the Bhashini pipeline.
     """
     update_system_state('predict_voice')
     
@@ -398,38 +409,62 @@ def voice_input():
         # 1. Get data from the form
         audio_file = request.files.get('audio')
         user_id = request.form.get('userId')
-        user_lang = request.form.get('language', 'en') # 'en', 'hi', or 'pa'
+        user_lang = request.form.get('language', 'en')
 
         if not audio_file or not user_id:
             return jsonify({"error": "audio file and userId are required."}), 400
 
-        # 2. Bhashini STT (Speech-to-Text)
-        audio_bytes = audio_file.read()
-        audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+        # --- 2. NEW: CONVERT WEBM TO WAV ---
+        try:
+            # Read the incoming webm audio file
+            webm_audio = AudioSegment.from_file(audio_file, format="webm")
+            
+            # Set to 1 channel (mono) and 16000Hz (Bhashini's preferred format)
+            wav_audio = webm_audio.set_channels(1).set_frame_rate(16000)
+            
+            # --- THIS IS THE FIX ---
+            # Use BytesIO directly, since you already imported it
+            wav_in_memory = BytesIO()
+            # --- END OF FIX ---
+
+            wav_audio.export(wav_in_memory, format="wav")
+            wav_in_memory.seek(0)
+            
+            # Read the bytes from the in-memory file
+            audio_bytes = wav_in_memory.read()
+            
+            # Now, base64 encode the *WAV* bytes
+            audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+            
+        except Exception as audio_err:
+            logger.error(f"Failed to convert audio for Bhashini: {audio_err}", exc_info=True)
+            return jsonify({"error": "Failed to process audio file."}), 500
+        # --- END OF CONVERSION ---
+
         
-        # Bhashini's ASR/STT pipeline task
+        # 3. Bhashini STT (Speech-to-Text)
         stt_input = {"audio": [{"audioContent": audio_base64}]}
         stt_result = call_bhashini_pipeline(["asr"], stt_input, source_lang=user_lang)
         
         transcribed_text = stt_result["pipelineResponse"][0]["output"][0]["source"]
         logger.info(f"Bhashini STT ({user_lang}): '{transcribed_text}'")
 
-        # 3. Bhashini NMT (Source Language -> English)
+        # 4. Bhashini NMT (Source Language -> English)
         nmt_en_input = {"input": [{"source": transcribed_text}]}
         nmt_en_result = call_bhashini_pipeline(["translation"], nmt_en_input, source_lang=user_lang, target_lang="en")
         
         english_text = nmt_en_result["pipelineResponse"][0]["output"][0]["target"]
         logger.info(f"Bhashini NMT ({user_lang}->en): '{english_text}'")
         
-        # 4. Call Llama 3.3 (The "Brain")
+        # 5. Call Llama 3.3 (The "Brain")
         predict_data = {
             "message": english_text,
             "userId": user_id,
-            "language": user_lang # Pass the *original* language
+            "language": user_lang 
         }
         action_payload = _predict_logic_helper(predict_data)
         
-        # 5. Bhashini NMT (English -> Source Language)
+        # 6. Bhashini NMT (English -> Source Language)
         english_response_text = action_payload["response"]
         nmt_out_input = {"input": [{"source": english_response_text}]}
         nmt_out_result = call_bhashini_pipeline(["translation"], nmt_out_input, source_lang="en", target_lang=user_lang)
@@ -437,7 +472,7 @@ def voice_input():
         translated_text = nmt_out_result["pipelineResponse"][0]["output"][0]["target"]
         logger.info(f"Bhashini NMT (en->{user_lang}): '{translated_text}'")
 
-        # 6. Bhashini TTS (Text-to-Speech)
+        # 7. Bhashini TTS (Text-to-Speech)
         tts_input = {"input": [{"source": translated_text}]}
         tts_result = call_bhashini_pipeline(["tts"], tts_input, source_lang=user_lang)
         
@@ -447,17 +482,11 @@ def voice_input():
             
         logger.info(f"Bhashini TTS ({user_lang}) successful, audio size: {len(audio_base64_out)}")
 
-        # 7. Send the final package to the frontend
+        # 8. Send the final package to the frontend
         action_payload["response"] = translated_text
         action_payload["audioData"] = audio_base64_out
         
-        # Commit the ConversationTurn (which was created in the helper)
-        try:
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Failed to commit transaction in /v1/voice-input: {e}", exc_info=True)
-        
+        db.session.commit()
         return jsonify(action_payload)
 
     except Exception as e:
