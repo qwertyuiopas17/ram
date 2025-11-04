@@ -248,30 +248,21 @@ scheduler = BackgroundScheduler(daemon=True)
 
 # Replace your entire function with this one
 def check_and_send_reminders():
-    """The background job that checks for due reminders, sends push notifications, and reschedules."""
-    # --- ADDED: Ensure app context for database operations ---
+    """The background job that checks for due reminders, sends push notifications, and SETS PENDING FLAG."""
     with app.app_context():
-        # --- ADDED: Load memory at the start of the job ---
-        #memory_loaded = conversation_memory.load_from_file(os.path.join(models_path, 'conversation_memory.json'))
-        #if not memory_loaded:
-             #logger.error("Failed to load conversation memory in reminder job. Aborting check.")
-             #return # Cannot proceed without memory
-
         try:
             now_utc = datetime.now(timezone.utc)
             reminders_updated = False # Flag to check if we need to save
 
-            # Iterate through a copy of profiles in case memory changes during iteration (less likely here but safer)
             for user_id, profile in list(conversation_memory.user_profiles.items()):
-                # Iterate through a copy of reminders for safe modification
                 for reminder in list(profile.medicine_reminders):
-                    # Check if reminder is enabled and has a next alert time
+                    # Check if reminder is enabled, has a next alert time, and hasn't been "sent" (pending) yet
                     if reminder.get('reminder_enabled', True) and reminder.get('next_alert_utc') and not reminder.get('alert_sent'):
                         try:
                             alert_time_utc = datetime.fromisoformat(reminder['next_alert_utc'])
                         except ValueError:
                              logger.error(f"Invalid ISO format for next_alert_utc for user {user_id}, reminder {reminder.get('medicine_name')}. Skipping.")
-                             continue # Skip this reminder
+                             continue
 
                         # Check if the alert time is now or in the past
                         if alert_time_utc <= now_utc:
@@ -280,47 +271,41 @@ def check_and_send_reminders():
                             user_db = User.query.filter_by(patient_id=profile.user_id).first()
                             if not user_db:
                                 logger.warning(f"User DB record not found for patient_id {profile.user_id}. Cannot send reminder.")
-                                continue # Skip if user doesn't exist in DB
+                                continue
 
                             subscriptions = PushSubscription.query.filter_by(user_id=user_db.id).all()
+                            
+                            # --- START: THIS IS THE CORRECTED LOGIC ---
+                            # Set flags to indicate an alert was sent and is pending acknowledgment
+                            # We DO NOT reschedule next_alert_utc here.
+                            reminder['pending_alert'] = True
+                            reminder['alert_sent'] = True # Mark as sent to prevent re-sending this specific alert
+                            reminders_updated = True
+                            logger.info(f"Set pending_alert=True for {reminder['medicine_name']} for user {profile.user_id}")
+                            # --- END: THIS IS THE CORRECTED LOGIC ---
+
                             if not subscriptions:
-                                logger.warning(f"No push subscriptions found for user {profile.user_id}. Marking alert as sent.")
-                                # --- START: Reschedule even if no subscription ---
-                                user_timezone = reminder.get("timezone", "UTC")
-                                times_list = reminder.get("times", [])
-                                if times_list:
-                                    reminder['next_alert_utc'] = conversation_memory._calculate_next_utc_timestamp(times_list, user_timezone)
-                                    reminder['alert_sent'] = False # Reset flag for the *next* alert
-                                    logger.info(f"Rescheduled reminder (no subs) for {reminder['medicine_name']} to {reminder['next_alert_utc']}")
-                                    reminders_updated = True
-                                else:
-                                    reminder['alert_sent'] = True # Cannot reschedule without times
-                                    reminders_updated = True
-                                # --- END: Reschedule even if no subscription ---
-                                continue
+                                logger.warning(f"No push subscriptions found for user {profile.user_id}. Alert is set to pending in-app.")
+                                continue # Go to the next reminder, no devices to send to
 
                             push_payload = json.dumps({
                                 "title": "💊 Sehat Sahara Reminder",
                                 "options": {
                                     "body": f"It's time to take: {reminder['medicine_name']} ({reminder.get('dosage', 'N/A')})",
-                                    # --- ADDED: More specific icon ---
                                     "icon": "https://i.ibb.co/bmdxHqN/pills.png",
                                     "actions": [
                                         {"action": "mark-taken", "title": "Mark as Taken"},
                                         {"action": "close", "title": "Close"}
                                     ],
                                     "data": {
-                                        # --- ADDED: Send necessary data to frontend ---
                                         "action": "mark-taken",
                                         "medicineName": reminder['medicine_name'],
                                         "userId": profile.user_id
                                     },
-                                    # --- ADDED: Tag to allow replacing pending notifications ---
                                     "tag": f"med-reminder-{profile.user_id}-{reminder['medicine_name'].replace(' ','-')}"
                                 }
                             })
 
-                            sent_successfully = False
                             for sub in subscriptions:
                                 try:
                                     webpush(
@@ -330,62 +315,23 @@ def check_and_send_reminders():
                                         vapid_claims={"sub": "mailto:" + VAPID_CLAIM_EMAIL}
                                     )
                                     logger.info(f"Push notification sent successfully to a device for user {profile.user_id}")
-                                    sent_successfully = True
                                 except WebPushException as ex:
                                     logger.error(f"Failed to send push notification: {ex}")
-                                    # Handle expired/invalid subscriptions
                                     if ex.response and ex.response.status_code in [404, 410]:
                                         logger.info(f"Deleting expired subscription for user {profile.user_id}")
                                         db.session.delete(sub)
-                                        # Commit immediately to remove invalid sub
                                         db.session.commit()
                                 except Exception as push_err:
                                      logger.error(f"Unexpected error sending push: {push_err}")
+                            
+                            # --- REMOVED: The old rescheduling logic that was here is gone. This is correct. ---
 
-
-                            # --- START: Modified Rescheduling Logic ---
-                            if sent_successfully:
-                                logger.info(f"Successfully sent alert for {reminder['medicine_name']} to user {profile.user_id}. Now rescheduling.")
-                            else:
-                                logger.warning(f"Failed to send alert for {reminder['medicine_name']} to user {profile.user_id} (no valid subscriptions?). Still rescheduling.")
-
-                            # Calculate the next alert time REGARDLESS of send success
-                            user_timezone = reminder.get("timezone", "UTC")
-                            times_list = reminder.get("times", [])
-
-                            # Optional: Add duration check here later if needed
-                            start_date_str = reminder.get('start_date')
-                            duration_days = reminder.get('duration_days')
-                            if start_date_str and duration_days:
-                                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-                                end_date = start_date + timedelta(days=duration_days)
-                                if datetime.now().date() >= end_date:
-                                    logger.info(f"Reminder duration ended for {reminder['medicine_name']}. Disabling.")
-                                    reminder['reminder_enabled'] = False
-                                    reminders_updated = True
-                                    continue # Skip rescheduling
-
-                            if times_list:
-                                next_alert_iso = conversation_memory._calculate_next_utc_timestamp(times_list, user_timezone)
-                                reminder['next_alert_utc'] = next_alert_iso
-                                reminder['alert_sent'] = False # Reset flag for the *next* schedule
-                                logger.info(f"Rescheduled reminder for {reminder['medicine_name']} to {next_alert_iso}")
-                                reminders_updated = True
-                            else:
-                                # Cannot reschedule without a time list, mark as sent to prevent re-sending
-                                reminder['alert_sent'] = True
-                                logger.warning(f"Reminder for {reminder['medicine_name']} has no times_list, cannot reschedule. Marked as sent.")
-                                reminders_updated = True
-                            # --- END: Modified Rescheduling Logic ---
-
-            # --- Save memory ONCE after checking all users/reminders ---
             if reminders_updated:
                 logger.info("Saving updated reminder schedules to memory file.")
                 conversation_memory.save_to_file(os.path.join(models_path, 'conversation_memory.json'))
 
         except Exception as e:
             logger.error(f"Error in background reminder job: {e}", exc_info=True)
-            # Rollback potential DB changes if error occurred during subscription deletion
             db.session.rollback()
 
 
@@ -1567,7 +1513,8 @@ def manage_medicine_reminders():
 
         if action == "get":
             reminders = conversation_memory.get_medicine_reminders(user_id)
-            alerts = conversation_memory.get_reminder_alerts(user_id)
+            #alerts = conversation_memory.get_reminder_alerts(user_id)
+            alerts = conversation_memory.get_pending_chat_alerts(user_id)
             return jsonify({
                 "success": True,
                 "reminders": reminders,
@@ -1608,13 +1555,58 @@ def manage_medicine_reminders():
         elif action == "update_adherence":
             medicine_name = data.get('medicine_name')
             taken_time = data.get('taken_time', datetime.now().strftime('%H:%M'))
-            conversation_memory.update_reminder_adherence(user_id, medicine_name, taken_time)
-            # --- ADD THIS LINE ---
-            # Reschedule the reminder for the next day and save the change
-            conversation_memory.recalculate_all_next_alerts(user_id)
-            conversation_memory.save_to_file(os.path.join(models_path, 'conversation_memory.json'))
-            return jsonify({"success": True, "message": f"Medicine {medicine_name} marked as taken"})
+            # --- START: ADD RESCHEDULING LOGIC ---
+            reminder_to_update = None
+            profile = conversation_memory.user_profiles.get(user_id)
+            if profile:
+                for r in profile.medicine_reminders:
+                    if r.get('medicine_name') == medicine_name:
+                        reminder_to_update = r
+                        break
+            
+            if reminder_to_update:
+                reminder_to_update['pending_alert'] = False
+                reminder_to_update['alert_sent'] = False
+                # Reschedule for the next time
+                user_timezone = reminder_to_update.get("timezone", "UTC")
+                times_list = reminder_to_update.get("times", [])
+                if times_list:
+                    reminder_to_update['next_alert_utc'] = conversation_memory._calculate_next_utc_timestamp(times_list, user_timezone)
+                    logger.info(f"Adherence updated, rescheduled {medicine_name} to {reminder_to_update['next_alert_utc']}")
+                
+                conversation_memory.update_reminder_adherence(user_id, medicine_name, taken_time)
+                conversation_memory.save_to_file(os.path.join(models_path, 'conversation_memory.json'))
+            # --- END: ADD RESCHEDULING LOGIC ---
 
+            return jsonify({"success": True, "message": f"Medicine {medicine_name} marked as taken"})
+        # --- ADD THIS NEW ACTION ---
+        elif action == "skip_alert":
+            medicine_name = data.get('medicine_name')
+            if not medicine_name:
+                return jsonify({"error": "medicine_name is required for skip"}), 400
+
+            reminder_to_update = None
+            profile = conversation_memory.user_profiles.get(user_id)
+            if profile:
+                for r in profile.medicine_reminders:
+                    if r.get('medicine_name') == medicine_name:
+                        reminder_to_update = r
+                        break
+            
+            if reminder_to_update:
+                reminder_to_update['pending_alert'] = False
+                reminder_to_update['alert_sent'] = False
+                # Reschedule for the next time
+                user_timezone = reminder_to_update.get("timezone", "UTC")
+                times_list = reminder_to_update.get("times", [])
+                if times_list:
+                    reminder_to_update['next_alert_utc'] = conversation_memory._calculate_next_utc_timestamp(times_list, user_timezone)
+                    logger.info(f"Alert skipped, rescheduled {medicine_name} to {reminder_to_update['next_alert_utc']}")
+                
+                conversation_memory.save_to_file(os.path.join(models_path, 'conversation_memory.json'))
+            
+            return jsonify({"success": True, "message": "Alert skipped and rescheduled"})
+        # --- END NEW ACTION ---
         else:
             return jsonify({"error": "Invalid action."}), 400
         

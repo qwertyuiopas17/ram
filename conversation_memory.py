@@ -431,6 +431,8 @@ class ProgressiveConversationMemory:
                 if times_list:
                     # Clear the sent flag and calculate the next time
                     reminder['alert_sent'] = False
+                    # --- ADD THIS LINE ---
+                    reminder['pending_alert'] = False
                     reminder['next_alert_utc'] = self._calculate_next_utc_timestamp(times_list, user_timezone)
 
     def get_session_context(self, session_id: str) -> Dict[str, Any]:
@@ -676,7 +678,9 @@ class ProgressiveConversationMemory:
             'instructions': medicine_data.get('instructions', ''),
             'reminder_enabled': True,
             'created_at': datetime.now().isoformat(),
-            'next_alert_utc': next_alert_utc  # <-- STORE THE UTC TIMESTAMP
+            'next_alert_utc': next_alert_utc, # <-- STORE THE UTC TIMESTAMP
+            'pending_alert': False, # <-- ADD THIS LINE
+            'alert_sent': False
         }
         # --- END FIX ---
 
@@ -707,26 +711,40 @@ class ProgressiveConversationMemory:
         # Track adherence (simplified version)
         self.logger.info(f"Medicine taken: {medicine_name} at {taken_time} for user {user_id}")
 
-    def get_reminder_alerts(self, user_id: str) -> List[Dict[str, Any]]:
-        """Get pending medicine reminders for today"""
-        reminders = self.get_medicine_reminders(user_id)
+    def get_pending_chat_alerts(self, user_id: str) -> List[Dict[str, Any]]:
+        """
+        Gets reminders that have a pending alert flag set to True,
+        meaning they were sent but not acknowledged by the user.
+        """
+        if user_id not in self.user_profiles:
+            return []
+
+        profile = self.user_profiles[user_id]
         alerts = []
+        for reminder in profile.medicine_reminders:
+            # Check if the pending_alert flag is explicitly True
+            if reminder.get('pending_alert') == True:
+                # Find the time this alert was for (which is next_alert_utc, as it wasn't rescheduled)
+                alert_time_utc_str = reminder.get('next_alert_utc')
+                display_time = "Unknown"
+                if alert_time_utc_str:
+                    try:
+                        alert_time_utc = datetime.fromisoformat(alert_time_utc_str)
+                        # Try to convert to user's timezone for display
+                        user_timezone_str = reminder.get("timezone", "UTC")
+                        user_timezone = pytz.timezone(user_timezone_str)
+                        display_time = alert_time_utc.astimezone(user_timezone).strftime('%I:%M %p')
+                    except Exception:
+                        display_time = "Scheduled time" # Fallback
 
-        current_time = datetime.now().strftime('%H:%M')
-
-        for reminder in reminders:
-            for time_slot in reminder.get('times', []):
-                if time_slot <= current_time:
-                    alerts.append({
-                        'medicine_name': reminder['medicine_name'],
-                        'dosage': reminder['dosage'],
-                        'time': time_slot,
-                        'instructions': reminder.get('instructions', '')
-                    })
-
+                alerts.append({
+                    'medicine_name': reminder['medicine_name'],
+                    'dosage': reminder['dosage'],
+                    'time': display_time, # Show the time the alert was for
+                    'instructions': reminder.get('instructions', '')
+                })
+        
         return alerts
-    # Add these two new functions inside the ProgressiveConversationMemory class
-    # In conversation_memory.py, inside the ProgressiveConversationMemory class
 
     def update_medicine_reminder(self, user_id: str, original_medicine_name: str, new_medicine_data: Dict[str, Any]):
         """Finds and updates an existing medicine reminder."""
@@ -751,6 +769,21 @@ class ProgressiveConversationMemory:
                 profile.medicine_reminders[i]['instructions'] = new_medicine_data.get('instructions', '')
                 profile.medicine_reminders[i]['frequency'] = frequency_text # Update frequency
                 
+                # --- START: ADD THIS FIX ---
+                # Recalculate the next alert time based on the new data
+                user_timezone = new_medicine_data.get("timezone", reminder.get("timezone", "UTC"))
+                profile.medicine_reminders[i]['timezone'] = user_timezone # Save the timezone
+                
+                if times_list:
+                    next_alert_utc = self._calculate_next_utc_timestamp(times_list, user_timezone)
+                    profile.medicine_reminders[i]['next_alert_utc'] = next_alert_utc
+                    profile.medicine_reminders[i]['alert_sent'] = False # Reset flags for the new time
+                    profile.medicine_reminders[i]['pending_alert'] = False
+                    self.logger.info(f"Reminder updated and rescheduled to {next_alert_utc}")
+                else:
+                    profile.medicine_reminders[i]['next_alert_utc'] = None # No times, no next alert
+                # --- END: ADD THIS FIX ---
+
                 self.logger.info(f"Updated reminder '{original_medicine_name}' for user {user_id}")
                 return
         
