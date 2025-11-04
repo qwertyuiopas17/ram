@@ -382,7 +382,89 @@ def call_bhashini_pipeline(task_list, input_data, source_lang, target_lang=None)
 
 # Replace your entire function with this one
 # In chatbot.py
+#
+# IN: chatbot.py
+# ADD THIS ENTIRE NEW ROUTE
+#
+@app.route("/v1/voice-input", methods=["POST"])
+def voice_input():
+    """
+    Handles VOICE-BASED chat messages.
+    Orchestrates the full Bhashini STT -> NMT -> Llama -> NMT -> TTS pipeline.
+    """
+    update_system_state('predict_voice')
+    
+    try:
+        # 1. Get data from the form
+        audio_file = request.files.get('audio')
+        user_id = request.form.get('userId')
+        user_lang = request.form.get('language', 'en') # 'en', 'hi', or 'pa'
 
+        if not audio_file or not user_id:
+            return jsonify({"error": "audio file and userId are required."}), 400
+
+        # 2. Bhashini STT (Speech-to-Text)
+        audio_bytes = audio_file.read()
+        audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+        
+        # Bhashini's ASR/STT pipeline task
+        stt_input = {"audio": [{"audioContent": audio_base64}]}
+        stt_result = call_bhashini_pipeline(["asr"], stt_input, source_lang=user_lang)
+        
+        transcribed_text = stt_result["pipelineResponse"][0]["output"][0]["source"]
+        logger.info(f"Bhashini STT ({user_lang}): '{transcribed_text}'")
+
+        # 3. Bhashini NMT (Source Language -> English)
+        nmt_en_input = {"input": [{"source": transcribed_text}]}
+        nmt_en_result = call_bhashini_pipeline(["translation"], nmt_en_input, source_lang=user_lang, target_lang="en")
+        
+        english_text = nmt_en_result["pipelineResponse"][0]["output"][0]["target"]
+        logger.info(f"Bhashini NMT ({user_lang}->en): '{english_text}'")
+        
+        # 4. Call Llama 3.3 (The "Brain")
+        predict_data = {
+            "message": english_text,
+            "userId": user_id,
+            "language": user_lang # Pass the *original* language
+        }
+        action_payload = _predict_logic_helper(predict_data)
+        
+        # 5. Bhashini NMT (English -> Source Language)
+        english_response_text = action_payload["response"]
+        nmt_out_input = {"input": [{"source": english_response_text}]}
+        nmt_out_result = call_bhashini_pipeline(["translation"], nmt_out_input, source_lang="en", target_lang=user_lang)
+        
+        translated_text = nmt_out_result["pipelineResponse"][0]["output"][0]["target"]
+        logger.info(f"Bhashini NMT (en->{user_lang}): '{translated_text}'")
+
+        # 6. Bhashini TTS (Text-to-Speech)
+        tts_input = {"input": [{"source": translated_text}]}
+        tts_result = call_bhashini_pipeline(["tts"], tts_input, source_lang=user_lang)
+        
+        audio_base64_out = tts_result["pipelineResponse"][0]["audio"][0]["audioContent"]
+        if not audio_base64_out:
+            raise Exception("Bhashini TTS returned empty audio.")
+            
+        logger.info(f"Bhashini TTS ({user_lang}) successful, audio size: {len(audio_base64_out)}")
+
+        # 7. Send the final package to the frontend
+        action_payload["response"] = translated_text
+        action_payload["audioData"] = audio_base64_out
+        
+        # Commit the ConversationTurn (which was created in the helper)
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Failed to commit transaction in /v1/voice-input: {e}", exc_info=True)
+        
+        return jsonify(action_payload)
+
+    except Exception as e:
+        logger.error(f"FATAL ERROR in /v1/voice-input: {e}", exc_info=True)
+        db.session.rollback()
+        return jsonify({"response": "I'm sorry, I couldn't process your voice input. Please try again.", "action": "ERROR"}), 500
+        
 # Replace your entire function with this one
 def check_and_send_reminders():
     """The background job that checks for due reminders, sends push notifications, and SETS PENDING FLAG."""
