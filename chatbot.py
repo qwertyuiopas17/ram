@@ -12,7 +12,7 @@ import numpy as np
 import atexit
 # (In chatbot.py, after the import statements)
 import re
-from functools import wraps
+from functools import wraps, lru_cache
 import uuid
 import base64
 from io import BytesIO
@@ -4053,3 +4053,4 @@ if __name__ == "__main__":
     # Start the Flask application
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
