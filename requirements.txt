@@ -37,7 +37,8 @@ gevent-websocket==0.10.1
 agora-token-builder
 werkzeug>=2.0
 pydub
-pyaudioop-lts
+audioop-lts
+
 
 
 
