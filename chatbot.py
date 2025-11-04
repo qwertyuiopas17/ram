@@ -2810,6 +2810,10 @@ def get_history():
             "summary": {
                 "total_conversations": current_user.total_conversations,
                 "current_stage": conversation_stage,
+                "risk_level": getattr(current_user, 'current_risk_level', 'low'),
+                "improvement_trend": getattr(current_user, 'improvement_trend', 'stable'),
+                "member_since": current_user.created_at.isoformat(),
+                "last_interaction": current_user.last_login.isoformat() if current_user.last_login else None
                 # ... (rest of your summary) ...
             }
         }
