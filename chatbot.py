@@ -305,17 +305,6 @@ def check_and_send_reminders():
                                     "body": f"It's time to take: {reminder['medicine_name']} ({reminder.get('dosage', 'N/A')})",
                                     # --- ADDED: More specific icon ---
                                     "icon": "https://i.ibb.co/bmdxHqN/pills.png",
-                                    # --- START: NEW ALARM OPTIONS ---
-                                    # 1. (Optional) Vibrate pattern (for mobile)
-                                    "vibrate": [200, 100, 200, 100, 200],
-                                    
-                                    # 2. Custom sound file (must be in your static folder)
-                                    # In chatbot.py
-                                    "sound": "https://saharasaathi.netlify.app/static/sound/alarm.mp3", 
-                                    
-                                    # 3. (Recommended) Keep notification on screen until user interacts
-                                    "requireInteraction": True, 
-                                    # --- END: NEW ALARM OPTIONS ---
                                     "actions": [
                                         {"action": "mark-taken", "title": "Mark as Taken"},
                                         {"action": "close", "title": "Close"}
