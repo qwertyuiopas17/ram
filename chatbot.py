@@ -233,6 +233,10 @@ db.init_app(app)
 VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY")
 VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY")
 VAPID_CLAIM_EMAIL = "dedpull2005@outlook.com"
+# You ONLY need to set these two environment variables
+BHASHINI_USER_ID = os.environ.get("BHASHINI_USER_ID")
+BHASHINI_ULCA_API_KEY = os.environ.get("BHASHINI_ULCA_API_KEY") # This is your "Udyat Key"
+BHASHINI_PIPELINE_CONFIG_URL = "https://meity-auth.ulcacontrib.org/ulca/apis/v0/model/getModelsPipeline"
 
 if not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY:
     logger.critical("FATAL ERROR: VAPID_PRIVATE_KEY and VAPID_PUBLIC_KEY are not set in the environment.")
@@ -242,6 +246,138 @@ if not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY:
 
 # --- BACKGROUND SCHEDULER FOR SENDING NOTIFICATIONS ---
 scheduler = BackgroundScheduler(daemon=True)
+# This function uses your "Udyat Key" (ulcaApiKey) to get your "Inference API Key"
+@lru_cache(maxsize=5)
+def get_bhashini_config(pipeline_id):
+    """
+    Calls Bhashini's config endpoint to get the real compute URL,
+    inference API key, and service IDs for a specific pipeline.
+    """
+    if not BHASHINI_USER_ID or not BHASHINI_ULCA_API_KEY:
+        logger.error("FATAL: BHASHINI_USER_ID or BHASHINI_ULCA_API_KEY are not set.")
+        return None
+        
+    headers = {
+        "userID": BHASHINI_USER_ID,
+        "ulcaApiKey": BHASHINI_ULCA_API_KEY
+    }
+    payload = {
+        "pipelineTasks": [
+            {"taskType": "asr"},
+            {"taskType": "translation"},
+            {"taskType": "tts"}
+        ],
+        "pipelineRequestConfig": {
+            "pipelineId": pipeline_id
+        }
+    }
+    try:
+        response = requests.post(BHASHINI_PIPELINE_CONFIG_URL, json=payload, headers=headers)
+        response.raise_for_status() # Raises an error for bad responses (4xx, 5xx)
+        config_data = response.json()
+        
+        # This is the "Inference API Key" Bhashini gives you
+        inference_endpoint = config_data["pipelineInferenceAPIEndPoint"]
+        inference_api_key_header_name = inference_endpoint["inferenceApiKey"]["name"]
+        inference_api_key_value = inference_endpoint["inferenceApiKey"]["value"]
+        
+        # This dict maps tasks to their required serviceId
+        service_id_map = {}
+        for task in config_data["pipelineResponseConfig"]:
+            task_type = task["taskType"]
+            for config in task["config"]:
+                if task_type == "asr":
+                    service_id_map[f"asr-{config['language']['sourceLanguage']}"] = config["serviceId"]
+                elif task_type == "translation":
+                    lang_key = f"nmt-{config['language']['sourceLanguage']}-{config['language']['targetLanguage']}"
+                    service_id_map[lang_key] = config["serviceId"]
+                elif task_type == "tts":
+                    service_id_map[f"tts-{config['language']['sourceLanguage']}"] = config["serviceId"]
+
+        return {
+            "compute_url": inference_endpoint["callbackUrl"],
+            "compute_api_key_name": inference_api_key_header_name,
+            "compute_api_key_value": inference_api_key_value,
+            "service_ids": service_id_map
+        }
+    except Exception as e:
+        logger.error(f"FATAL: Could not get Bhashini config for pipeline {pipeline_id}: {e}", exc_info=True)
+        return None
+
+# This function uses the "Inference API Key" to do the actual work
+def call_bhashini_pipeline(task_list, input_data, source_lang, target_lang=None):
+    """
+    Calls the Bhashini pipeline compute API for STT, NMT, or TTS.
+    """
+    
+    # !!! IMPORTANT: REPLACE THIS WITH YOUR PIPELINE ID FROM THE BHASHINI DASHBOARD !!!
+    # This ID controls which models (e.g., IIT-M, AI4Bharat) you are using.
+    PIPELINE_ID = "64392f96daac500b55c543cd" # e.g., "64392f96daac500b55c543cd"
+    
+    config = get_bhashini_config(PIPELINE_ID)
+    if not config:
+        raise Exception("Bhashini config is not available. Check API keys and Pipeline ID.")
+
+    # Use the "Inference API Key" (compute_api_key_value) in the header
+    headers = {
+        config["compute_api_key_name"]: config["compute_api_key_value"],
+        "Content-Type": "application/json"
+    }
+    
+    pipeline_tasks = []
+    
+    # Construct the task payload based on Bhashini's requirements
+    for task_type in task_list:
+        if task_type == "asr":
+            service_id = config["service_ids"].get(f"asr-{source_lang}")
+            if not service_id:
+                raise Exception(f"No Bhashini ASR serviceId found for language: {source_lang}")
+            pipeline_tasks.append({
+                "taskType": "asr",
+                "config": {
+                    "language": {"sourceLanguage": source_lang},
+                    "serviceId": service_id,
+                    "audioFormat": "wav",
+                    "samplingRate": 16000
+                }
+            })
+        
+        elif task_type == "translation":
+            service_id = config["service_ids"].get(f"nmt-{source_lang}-{target_lang}")
+            if not service_id:
+                raise Exception(f"No Bhashini NMT serviceId found for: {source_lang}->{target_lang}")
+            pipeline_tasks.append({
+                "taskType": "translation",
+                "config": {
+                    "language": {
+                        "sourceLanguage": source_lang,
+                        "targetLanguage": target_lang
+                    },
+                    "serviceId": service_id
+                }
+            })
+            
+        elif task_type == "tts":
+            service_id = config["service_ids"].get(f"tts-{source_lang}")
+            if not service_id:
+                raise Exception(f"No Bhashini TTS serviceId found for language: {source_lang}")
+            pipeline_tasks.append({
+                "taskType": "tts",
+                "config": {
+                    "language": {"sourceLanguage": source_lang},
+                    "serviceId": service_id,
+                    "gender": "female" # You can make this configurable
+                }
+            })
+
+    payload = {
+        "pipelineTasks": pipeline_tasks,
+        "inputData": input_data
+    }
+    
+    response = requests.post(config["compute_url"], json=payload, headers=headers)
+    response.raise_for_status()
+    return response.json()
 
 # Replace your entire function with this one
 # In chatbot.py
@@ -1856,57 +1992,65 @@ def _get_or_create_symptom_context(user_id: str, initial_symptom: Optional[str] 
 # In chatbot.py
 
 # In chatbot.py
-
-@app.route("/v1/predict", methods=["POST"])
-def predict():
+#
+# IN: chatbot.py
+#
+def _predict_logic_helper(data: dict) -> dict:
     """
-    Enhanced prediction endpoint with flexible state management and isolated, stateful logic
-    for booking and symptom checking.
+    This is your *ENTIRE EXISTING* /v1/predict function's logic,
+    refactored to be a simple Python function.
+    It takes a dictionary 'data' and returns a dictionary 'action_payload'.
+    
+    It assumes nlu_processor, sehat_sahara_client, conversation_memory,
+    response_generator, db, and logger are all available in its scope.
     """
     try:
         start_time = time.time()
-        update_system_state('predict')
 
-        data = request.get_json() or {}
+        # 1. Get data from the 'data' dict, not request.json
         user_message = (data.get("message") or "").strip()
         user_id_str = (data.get("userId") or "").strip()
         button_action = data.get("buttonAction")
         button_params = data.get("parameters", {})
+        
+        # This is the user's *original* language (e.g., 'hi', 'pa')
+        # The user_message is already translated to English
+        user_language = data.get("language", "en") 
 
         if not user_id_str or not user_message:
-            return jsonify({"error": "userId and message are required."}), 400
+            return {"response": "User ID and message are required.", "action": "ERROR"}
 
         current_user = User.query.filter_by(patient_id=user_id_str, is_active=True).first()
         if not current_user:
-            return jsonify({"error": "User not found.", "login_required": True}), 401
+            return {"response": "User not found.", "action": "ERROR"}
 
-        # --- START: MODIFIED STATE MANAGEMENT LOGIC ---
+        # 2. NLU Processor (Your dependency is here)
+        # NLU is now processing the English text
+        nlu_understanding = nlu_processor.understand_user_intent(user_message, sehat_sahara_mode=True)
+        
+        # 3. Language Persistence (Your logic is here)
+        # We use user_language (the *original* lang) not the NLU's detection
+        # (which would always be 'en' now)
+        detected_lang = user_language 
+        if current_user and current_user.preferred_language != detected_lang:
+            logger.info(f"Updating user {current_user.patient_id} preferred language from '{current_user.preferred_language}' to '{detected_lang}'")
+            current_user.preferred_language = detected_lang
+            db.session.add(current_user)
+        
+        primary_intent = nlu_understanding.get('primary_intent', 'general_inquiry')
 
-        # Get current task from conversation memory
+        # 4. State Management (Your task/memory logic is here)
+        # (Dependency on conversation_memory)
         if hasattr(initialize_ai_components, '_conversation_memory'):
             current_task_from_memory = initialize_ai_components._conversation_memory.get_current_task(current_user.patient_id)
             task_in_progress = current_task_from_memory.get('task') if current_task_from_memory else None
         else:
             task_in_progress = None
 
-        nlu_understanding = nlu_processor.understand_user_intent(user_message, sehat_sahara_mode=True)
-        
-        # --- FIX 1: Persist Detected Language ---
-        # This addresses Root Cause Analysis Problem 1
-        detected_lang = nlu_understanding.get('language_detected', 'hi')
-        if current_user and current_user.preferred_language != detected_lang:
-            logger.info(f"Updating user {current_user.patient_id} preferred language from '{current_user.preferred_language}' to '{detected_lang}'")
-            current_user.preferred_language = detected_lang
-            db.session.add(current_user) # Add to session, will be committed with the ConversationTurn
-        # --- END OF FIX 1 ---
-        
-        primary_intent = nlu_understanding.get('primary_intent', 'general_inquiry')
-
-        # FLEXIBLE STATE MANAGEMENT: Check if the user's new intent is unrelated to the current task.
         related_booking_intents = ['appointment_booking', 'SELECT_SPECIALTY', 'SELECT_DOCTOR', 'SELECT_DATE', 'SELECT_TIME', 'SELECT_MODE']
         related_symptom_intents = ['symptom_triage', 'CONTINUE_SYMPTOM_CHECK']
 
-        # Special handling for symptom triage context (from previous fix)
+        # Your symptom triage correction logic
         if task_in_progress == 'symptom_triage' and primary_intent == 'out_of_scope':
             symptom_followup_indicators = [
                 'days', 'hours', 'weeks', 'since', 'ago', 'started', 'began',
@@ -1919,6 +2063,7 @@ def predict():
                 logger.info(f"Correcting misclassified symptom follow-up for user {current_user.patient_id}")
                 primary_intent = 'symptom_triage'
 
+        # Your task switching logic
         is_unrelated_intent = (
             task_in_progress and
             primary_intent not in related_booking_intents and
@@ -1932,17 +2077,14 @@ def predict():
             logger.warning(f"User {current_user.patient_id} switched intent from '{task_in_progress}' to '{primary_intent}'. Completing old task.")
             if hasattr(initialize_ai_components, '_conversation_memory'):
                 initialize_ai_components._conversation_memory.complete_task(current_user.patient_id)
-            task_in_progress = None # Reset the task so the logic below can start a new one.
+            task_in_progress = None # Reset the task
 
-        # --- END: MODIFIED STATE MANAGEMENT LOGIC ---
-
+        # 5. Build AI Override Message (Your flow logic is here)
         ai_message_override = user_message
 
-        # --- TASK MANAGEMENT LOGIC ---
+        # --- APPOINTMENT BOOKING FLOW ---
         if task_in_progress == 'appointment_booking':
-            # --- START: ADDED RESTART CHECK ---
             if primary_intent == 'appointment_booking' and not button_action:
-                # User explicitly said "book appointment" again, restart the flow
                 logger.info(f"User {current_user.patient_id} requested to restart booking flow.")
                 booking_context = _get_or_create_booking_context(current_user.patient_id)
                 booking_context.clear() # Clear old context
@@ -1952,12 +2094,9 @@ def predict():
                 ai_message_override = f"CONTEXT: User wants to restart booking. Ask them to select a specialty using these buttons: [{specialty_buttons}]"
                 if hasattr(initialize_ai_components, '_conversation_memory'):
                     initialize_ai_components._conversation_memory.set_current_task(current_user.patient_id, 'appointment_booking', booking_context)
-                # Skip the rest of the old booking logic for this turn
-                task_in_progress = 'handled_restart' # Set a flag to prevent further processing in this block
-            # --- END: ADDED RESTART CHECK ---
-
-            # --- Original booking logic continues below, now conditional ---
-            if task_in_progress == 'appointment_booking': # Check flag
+                task_in_progress = 'handled_restart' 
+            
+            if task_in_progress == 'appointment_booking': 
                 booking_context = _get_or_create_booking_context(current_user.patient_id)
                 last_step = booking_context.get('last_step')
                 logger.info(f"Booking flow active for user {current_user.patient_id}: step={last_step}")
@@ -2025,21 +2164,16 @@ def predict():
                     else:
                         ai_message_override = "CONTEXT: Invalid mode. Please pick a mode from the list."
                 else:
-                    # This handles cases where the input doesn't match the expected step (e.g., "my head pains")
                     logger.warning(f"Booking flow stalled. User input '{user_message}' did not match step '{last_step}'. Re-prompting.")
                     ai_message_override = f"CONTEXT: User provided an unexpected response. Please re-ask them to select an option for the current step: '{last_step}'."
 
-                # Save context only if the restart wasn't just handled
                 if hasattr(initialize_ai_components, '_conversation_memory') and task_in_progress != 'handled_restart':
                      initialize_ai_components._conversation_memory.set_current_task(current_user.patient_id, 'appointment_booking', booking_context)
 
-        # --- START: REVISED SYMPTOM TRIAGE LOGIC ---
+        # --- SYMPTOM TRIAGE FLOW ---
         elif task_in_progress == 'symptom_triage':
             symptom_context = _get_or_create_symptom_context(current_user.patient_id)
-
-            # Always treat follow-up messages as part of the symptom check
             primary_intent = 'symptom_triage'
-
             symptom_context['symptoms_reported'].append(user_message)
             turn_count = symptom_context.get('turn_count', 0)
 
@@ -2051,13 +2185,9 @@ def predict():
                     "Acknowledge their latest reply and ask the *next* logical clarifying question. "
                     "DO NOT repeat a question that has already been answered in the history."
                 )
-
-                # Correctly increment the turn counter
                 symptom_context['turn_count'] = turn_count + 1
-
                 if hasattr(initialize_ai_components, '_conversation_memory'):
                     initialize_ai_components._conversation_memory.set_current_task(current_user.patient_id, 'symptom_triage', symptom_context)
-
             else:
                 reported_symptoms_str = '; '.join(symptom_context['symptoms_reported'])
                 ai_message_override = (
@@ -2072,9 +2202,8 @@ def predict():
                     )
                 if hasattr(initialize_ai_components, '_conversation_memory'):
                     initialize_ai_components._conversation_memory.complete_task(current_user.patient_id)
-        # --- END: REVISED SYMPTOM TRIAGE LOGIC ---
-
-        # --- This 'else' block handles starting NEW tasks ---
+        
+        # --- NEW TASK FLOW ---
         else:
             if primary_intent == 'appointment_booking':
                 booking_context = _get_or_create_booking_context(current_user.patient_id)
@@ -2088,18 +2217,17 @@ def predict():
 
             elif primary_intent == 'symptom_triage':
                 symptom_context = _get_or_create_symptom_context(current_user.patient_id, initial_symptom=user_message)
-                # Ensure context is clean for a new triage
                 symptom_context.clear()
-                symptom_context['symptoms_reported'] = [user_message] # Start with the first symptom
-                symptom_context['turn_count'] = 1 # Set turn count to 1
-                ai_message_override = f"CONTEXT: Start of a symptom check. User said '{user_message}'. Acknowledge their symptom and ask your first clarifying question (e.g., 'For how long?' or 'Is it a sharp or dull pain?')."
+                symptom_context['symptoms_reported'] = [user_message]
+                symptom_context['turn_count'] = 1
+                ai_message_override = f"CONTEXT: Start of a symptom check. User said '{user_message}'. Acknowledge their symptom and ask your first clarifying question (e.g., 'For how long?')."
                 if hasattr(initialize_ai_components, '_conversation_memory'):
                     initialize_ai_components._conversation_memory.set_current_task(current_user.patient_id, 'symptom_triage', symptom_context)
 
-            # --- Guidance Buttons Logic (No changes needed here) ---
+            # Your navigation button logic
             elif primary_intent in ['medicine_scan', 'how_to_medicine_scan']:
                 if hasattr(initialize_ai_components, '_conversation_memory'):
-                    initialize_ai_components._conversation_memory.complete_task(current_user.patient_id) # Clear any previous task
+                    initialize_ai_components._conversation_memory.complete_task(current_user.patient_id) 
                 ai_message_override = (
                     "CONTEXT: The user wants to scan a medicine. First, provide a brief, friendly guide on how to use the scanner (e.g., 'I can help with that! Just point your camera at the medicine...'). "
                     "Then, your action MUST be 'SHOW_GUIDANCE' and you MUST include this exact button in the interactive_buttons array: "
@@ -2108,67 +2236,58 @@ def predict():
 
             elif primary_intent in ['prescription_upload', 'how_to_prescription_upload', 'prescription_inquiry']:
                 if hasattr(initialize_ai_components, '_conversation_memory'):
-                    initialize_ai_components._conversation_memory.complete_task(current_user.patient_id) # Clear any previous task
+                    initialize_ai_components._conversation_memory.complete_task(current_user.patient_id)
                 ai_message_override = (
                     "CONTEXT: The user wants to upload a prescription. First, provide a brief, friendly guide on how to upload (e.g., 'Okay, let\\'s upload your prescription. Make sure the photo is clear...'). "
                     "Then, your action MUST be 'SHOW_GUIDANCE' and you MUST include this exact button in the interactive_buttons array: "
                     '[{"text": "📤 Upload Prescription", "action": "UPLOAD_PRESCRIPTION", "parameters": {}, "style": "primary"}]'
                 )
-            # --- End Guidance Buttons Logic ---
 
-        # --- AI RESPONSE GENERATION ---
+        # 6. AI Response Generation (Dependencies are here)
         if hasattr(initialize_ai_components, '_conversation_memory'):
             history = initialize_ai_components._conversation_memory.get_conversation_context(current_user.patient_id, turns=8)
         else:
             history = []
             
-        # --- FIX 2: Pass Detected Language to AI ---
-        # This addresses Root Cause Analysis Problem 2
-        # We use the 'detected_lang' variable from Fix 1
         context = {
             "user_intent": primary_intent, 
             "context_history": history,
-            "language": detected_lang 
+            "language": "en" # <-- *** CRITICAL: Always tell Llama to respond in English ***
         }
-        # --- END OF FIX 2 ---
 
         action_payload = None
+        # (Dependency on api_ollama_integration.py)
         if sehat_sahara_client and sehat_sahara_client.is_available:
             action_payload_str = sehat_sahara_client.generate_sehatsahara_response(
                 user_message=ai_message_override, context=context
             )
             if action_payload_str:
                 try:
-                    # Clean the JSON string (remove potential markdown, leading/trailing quotes)
                     cleaned_response = action_payload_str.strip().replace('```json', '').replace('```', '').strip()
                     if cleaned_response.startswith('"') and cleaned_response.endswith('"'):
                         cleaned_response = cleaned_response[1:-1]
 
                     action_payload = json.loads(cleaned_response)
 
-                    # --- Final Booking Handling (No changes needed here) ---
+                    # Your FINALIZE_BOOKING logic
                     if action_payload.get("action") == "FINALIZE_BOOKING":
                         booking_context = _get_or_create_booking_context(current_user.patient_id)
-                        doc_id_str = booking_context.get('doctor_id') # Get the string ID like 'DOC002'
+                        doc_id_str = booking_context.get('doctor_id')
                         appt_date = booking_context.get('date')
                         appt_time_str = booking_context.get('time')
-                        # Find doctor using the string ID
                         doctor = Doctor.query.filter_by(doctor_id=doc_id_str).first() if doc_id_str else None
-
 
                         if doctor and appt_date and appt_time_str:
                             appt_datetime = datetime.fromisoformat(f"{appt_date}T{appt_time_str}:00")
-
                             action_payload['response'] = f"Great! I'm confirming your appointment with Dr. {doctor.full_name} for {appt_datetime.strftime('%A, %b %d at %I:%M %p')}. One moment..."
                             action_payload['action'] = 'EXECUTE_BOOKING'
                             action_payload['parameters'] = {
-                                'doctorId': doctor.id, # Use the integer primary key ID for the booking endpoint
+                                'doctorId': doctor.id, 
                                 'appointmentDatetime': appt_datetime.isoformat(),
                                 'appointmentType': booking_context.get('mode', 'Video Call'),
                                 'chiefComplaint': f"Consultation for {booking_context.get('specialty', 'Unknown')}"
                             }
                             action_payload['interactive_buttons'] = []
-
                             if hasattr(initialize_ai_components, '_conversation_memory'):
                                 initialize_ai_components._conversation_memory.complete_task(current_user.patient_id)
                         else:
@@ -2177,15 +2296,13 @@ def predict():
                             action_payload['action'] = 'BOOKING_FAILED'
                             if hasattr(initialize_ai_components, '_conversation_memory'):
                                 initialize_ai_components._conversation_memory.complete_task(current_user.patient_id)
-                    # --- End Final Booking Handling ---
-
-                    # --- Medicine Remedy Buttons (No changes needed here) ---
+                    
+                    # Your SHOW_MEDICINE_REMEDY logic
                     if action_payload.get("action") == "SHOW_MEDICINE_REMEDY" and "interactive_buttons" not in action_payload:
                         action_payload["interactive_buttons"] = [
                             {"text": "📷 Scan Medicine", "action": "START_MEDICINE_SCANNER", "parameters": {}, "style": "primary"},
                             {"text": "📤 Upload Prescription", "action": "UPLOAD_PRESCRIPTION", "parameters": {}, "style": "secondary"}
                         ]
-                    # --- End Medicine Remedy Buttons ---
 
                 except json.JSONDecodeError as e:
                     logger.warning(f"Failed to parse AI response as JSON: {e}")
@@ -2195,56 +2312,107 @@ def predict():
                     logger.error(f"Error processing AI response: {e}", exc_info=True)
                     action_payload = None
 
-        # --- Fallback Response Generation (No changes needed) ---
+        # 7. Fallback Response (Dependency on ko.py)
         if not action_payload:
             logger.warning(f"AI failed or unavailable. Using local fallback for intent: {primary_intent}")
+            nlu_understanding['language_detected'] = 'en' # Force English fallback
             action_payload = response_generator.generate_response(
                 user_message=user_message,
                 nlu_result=nlu_understanding,
                 user_context={'user_id': current_user.patient_id},
                 conversation_history=history
             )
-            # Ensure fallback has necessary keys
             if "action" not in action_payload: action_payload["action"] = "CONTINUE_CONVERSATION"
             if "parameters" not in action_payload: action_payload["parameters"] = {}
             if "interactive_buttons" not in action_payload: action_payload["interactive_buttons"] = []
 
 
-        # --- FINAL PROCESSING & SAVING ---
-        # Use primary_intent determined *after* state management for saving
+        # 8. Final Processing & Saving
         action_payload_str = json.dumps(action_payload, ensure_ascii=False)
         turn_record = ConversationTurn(
             user_id=current_user.id,
-            user_message=user_message,
-            bot_response=action_payload_str,
-            detected_intent=primary_intent, # Use the potentially corrected intent
+            user_message=user_message, # Saves the English text
+            bot_response=action_payload_str, # Saves the English JSON
+            detected_intent=primary_intent, 
             action_triggered=action_payload.get('action')
         )
-        db.session.add(turn_record)
-        db.session.commit()
-
-        # Update button visibility if needed (No changes needed here)
+        db.session.add(turn_record) # Add to session, but DO NOT COMMIT
+        
+        # Your button visibility logic
         if action_payload.get('action') == 'SHOW_MEDICINE_REMEDY':
             if hasattr(initialize_ai_components, '_conversation_memory'):
                 initialize_ai_components._conversation_memory.update_button_visibility(current_user.patient_id, 'medicine_recommendation')
 
-        # Save conversation memory (No changes needed here)
+        response_time = time.time() - start_time
+        logger.info(f"User {current_user.patient_id} logic processed in {response_time:.2f}s. Intent: {primary_intent}, Action: {action_payload.get('action')}")
+        
+        # 9. Return
+        # Add the original user language to the payload so the wrapper can translate back
+        action_payload['user_language'] = user_language 
+        return action_payload
+
+    except Exception as e:
+        logger.error(f"FATAL ERROR in _predict_logic_helper: {e}", exc_info=True)
+        db.session.rollback()
+        return {"response": "I'm having a technical issue. Please try again.", "action": "SHOW_APP_FEATURES", "interactive_buttons": [], "user_language": "en"}
+
+#
+# IN: chatbot.py
+#
+# REPLACE your old @app.route("/v1/predict", ...) with this:
+#
+@app.route("/v1/predict", methods=["POST"])
+def predict():
+    """
+    Handles TEXT-BASED chat messages.
+    Translates to English, calls the main logic helper, translates back,
+    and returns the final JSON.
+    """
+    update_system_state('predict')
+    data = request.get_json() or {}
+    user_message = data.get("message", "").strip()
+    user_lang = data.get("language", "en") # 'en', 'hi', or 'pa'
+
+    try:
+        # --- 1. NMT (Translate to English) ---
+        english_text = user_message
+        if user_lang != "en" and user_message:
+            nmt_en_input = {"input": [{"source": user_message}]}
+            nmt_en_result = call_bhashini_pipeline(["translation"], nmt_en_input, source_lang=user_lang, target_lang="en")
+            english_text = nmt_en_result["pipelineResponse"][0]["output"][0]["target"]
+            logger.info(f"Bhashini NMT ({user_lang}->en): '{english_text}'")
+        
+        # 2. Call the "Brain"
+        data["message"] = english_text # Replace message with translated version
+        action_payload = _predict_logic_helper(data)
+
+        # 3. NMT (Translate back to User's Language)
+        english_response_text = action_payload["response"]
+        translated_text = english_response_text
+        if user_lang != "en" and english_response_text:
+            nmt_out_input = {"input": [{"source": english_response_text}]}
+            nmt_out_result = call_bhashini_pipeline(["translation"], nmt_out_input, source_lang="en", target_lang=user_lang)
+            translated_text = nmt_out_result["pipelineResponse"][0]["output"][0]["target"]
+            logger.info(f"Bhashini NMT (en->{user_lang}): '{translated_text}'")
+        
+        # 4. Finalize Response
+        action_payload["response"] = translated_text # Overwrite with translated text
+        
+        # (Your conversation_memory.save_to_file logic can go here if you want)
         try:
             if hasattr(initialize_ai_components, '_conversation_memory'):
                 initialize_ai_components._conversation_memory.save_to_file(os.path.join(models_path, 'conversation_memory.json'))
         except Exception as save_error:
             logger.warning(f"Failed to save conversation memory: {save_error}")
 
-        response_time = time.time() - start_time
-        logger.info(f"User {current_user.patient_id} processed in {response_time:.2f}s. Intent: {primary_intent}, Action: {action_payload.get('action')}")
-
+        # 5. Commit DB and Send
+        db.session.commit() # Commit the ConversationTurn added in the helper
         return jsonify(action_payload)
 
-    # --- Exception Handling (No changes needed) ---
     except Exception as e:
-        logger.error(f"FATAL ERROR in /predict endpoint: {e}", exc_info=True)
         db.session.rollback()
-        return jsonify({"response": "I'm having a technical issue. Please try again.", "action": "SHOW_APP_FEATURES", "interactive_buttons": []}), 500
+        logger.error(f"Failed to process text predict: {e}", exc_info=True)
+        return jsonify({"response": "Error processing text request.", "action": "ERROR"}), 500
 
 # In chatbot.py, replace the whole book_doctor function with this one
 @app.route("/v1/book-doctor", methods=["POST"])
