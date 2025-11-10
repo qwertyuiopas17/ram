@@ -20,6 +20,7 @@ import groq
 from agora_token_builder import RtcTokenBuilder, RtmTokenBuilder
 from werkzeug.middleware.proxy_fix import ProxyFix
 import requests
+import math
 
 from pydub import AudioSegment
 
@@ -3089,17 +3090,40 @@ def get_user_profile(user_id):
         }), 500
     
 # Find the trigger_sos function and replace it entirely with this updated version:
+
+# (In chatbot.py, near utility functions)
+def calculate_distance(lat1, lng1, lat2, lng2):
+    """Calculate distance between two points using Haversine formula (in km)"""
+    # Convert to radians
+    lat1_rad = math.radians(lat1)
+    lng1_rad = math.radians(lng1)
+    lat2_rad = math.radians(lat2)
+    lng2_rad = math.radians(lng2)
+
+    # Haversine formula
+    dlat = lat2_rad - lat1_rad
+    dlng = lng2_rad - lng1_rad
+
+    a = math.sin(dlat/2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlng/2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+
+    # Earth's radius in km
+    R = 6371.0
+    distance = R * c
+
+    return distance
+
 @app.route("/v1/sos-trigger", methods=["POST"])
 def trigger_sos():
     data = request.get_json() or {}
     user_id = data.get("userId")
     location = data.get("location")
     message = data.get("message")
-    
+
     user = User.query.filter_by(patient_id=user_id).first()
     if not user:
         return jsonify({"success": False, "error": "User not found"}), 404
-        
+
     event_id = str(uuid.uuid4())
     sos_events[event_id] = {
         "id": len(sos_events) + 1,
@@ -3112,26 +3136,44 @@ def trigger_sos():
         "status": "pending",
         "emergency_type": "medical_emergency"
     }
-    
+
     logger.info(f"SOS Triggered by {user.full_name} ({user_id})")
 
-    # --- START: NEW PUSH NOTIFICATION LOGIC ---
+    # --- START: NEW PUSH NOTIFICATION LOGIC WITH LOCATION FILTERING ---
     try:
-        # In a real app, you would filter for users with the 'saathi' role
-        # For this demo, we notify all subscribed users.
+        # Get all saathi users
         saathi_users = User.query.filter_by(role='saathi').all()
         if not saathi_users:
             logger.warning("SOS triggered, but no users with the 'saathi' role were found to notify.")
             return jsonify({"success": True, "message": "SOS event created, but no Saathis found."})
 
-        saathi_user_ids = [user.id for user in saathi_users]
+        # Filter saathi within 2km radius if patient location is available
+        patient_lat = location.get('latitude') if location else None
+        patient_lng = location.get('longitude') if location else None
 
+        if patient_lat and patient_lng:
+            nearby_saathi = []
+            for saathi in saathi_users:
+                if saathi.latitude and saathi.longitude:
+                    distance = calculate_distance(saathi.latitude, saathi.longitude, patient_lat, patient_lng)
+                    if distance <= 2.0:  # 2km radius
+                        nearby_saathi.append(saathi)
+            saathi_users = nearby_saathi
+            logger.info(f"Filtered to {len(saathi_users)} saathi within 2km radius")
+        else:
+            logger.warning("Patient location not available, notifying all saathi")
+
+        if not saathi_users:
+            logger.warning("No saathi found within 2km radius")
+            return jsonify({"success": True, "message": "SOS event created, but no nearby Saathis found."})
+
+        saathi_user_ids = [user.id for user in saathi_users]
 
         subscriptions = PushSubscription.query.filter(PushSubscription.user_id.in_(saathi_user_ids)).all()
         if not subscriptions:
-            logger.warning(f"Found {len(saathi_users)} Saathis, but none have active push subscriptions.")
-        
-        
+            logger.warning(f"Found {len(saathi_users)} nearby Saathis, but none have active push subscriptions.")
+
+
         push_payload = json.dumps({
             "title": "🚨 EMERGENCY ALERT 🚨",
             "options": {
@@ -3153,7 +3195,7 @@ def trigger_sos():
                     vapid_private_key=VAPID_PRIVATE_KEY,
                     vapid_claims={"sub": "mailto:" + VAPID_CLAIM_EMAIL}
                 )
-                logger.info(f"Sent SOS push notification for event {event_id} to a Saathi device.")
+                logger.info(f"Sent SOS push notification for event {event_id} to a nearby Saathi device.")
             except WebPushException as ex:
                 logger.error(f"Failed to send SOS push notification: {ex}")
                 # If a subscription is expired, delete it from the DB
@@ -3164,17 +3206,87 @@ def trigger_sos():
     except Exception as e:
         logger.error(f"An error occurred during SOS push notification dispatch: {e}")
     # --- END: NEW PUSH NOTIFICATION LOGIC ---
-    
+
     return jsonify({"success": True, "message": "SOS event created.", "event_id": event_id})
 
 @app.route("/v1/sos-events", methods=["GET"])
 def get_sos_events():
-    # Return all events, sorted with pending first
-    pending_events = [e for e in sos_events.values() if e['status'] == 'pending']
-    other_events = [e for e in sos_events.values() if e['status'] != 'pending']
-    all_sorted = sorted(pending_events, key=lambda x: x['timestamp'], reverse=True) + sorted(other_events, key=lambda x: x['timestamp'], reverse=True)
-    
-    return jsonify({"success": True, "sos_events": all_sorted})
+    # Get current saathi user
+    current_user = get_current_user()
+    if not current_user or current_user.role != 'saathi':
+        return jsonify({"success": False, "message": "Saathi authentication required"}), 401
+
+    # Get saathi location
+    saathi_lat = current_user.latitude
+    saathi_lng = current_user.longitude
+
+    if not saathi_lat or not saathi_lng:
+        # If saathi has no location, return all events (fallback)
+        pending_events = [e for e in sos_events.values() if e['status'] == 'pending']
+        other_events = [e for e in sos_events.values() if e['status'] != 'pending']
+        all_sorted = sorted(pending_events, key=lambda x: x['timestamp'], reverse=True) + sorted(other_events, key=lambda x: x['timestamp'], reverse=True)
+        return jsonify({"success": True, "sos_events": all_sorted})
+
+    # Filter events within 2km radius and add patient details
+    filtered_events = []
+    for event in sos_events.values():
+        if event['status'] == 'pending':
+            patient_location = event.get('location', {})
+            if patient_location and 'latitude' in patient_location and 'longitude' in patient_location:
+                patient_lat = patient_location['latitude']
+                patient_lng = patient_location['longitude']
+
+                # Calculate distance using Haversine formula
+                distance = calculate_distance(saathi_lat, saathi_lng, patient_lat, patient_lng)
+                if distance <= 2.0:  # 2km radius
+                    # Get patient details from database
+                    patient = User.query.filter_by(patient_id=event['patient_id']).first()
+                    if patient:
+                        # Add patient details to the event
+                        enhanced_event = event.copy()
+                        enhanced_event['patient_details'] = {
+                            'full_address': patient.get_full_address(),
+                            'phone_number': patient.phone_number,
+                            'email': patient.email
+                        }
+                        enhanced_event['distance_km'] = round(distance, 2)
+                        filtered_events.append(enhanced_event)
+                    else:
+                        # If patient not found in DB, still include the event
+                        filtered_events.append(event)
+
+    # Sort by timestamp (most recent first)
+    filtered_events.sort(key=lambda x: x['timestamp'], reverse=True)
+
+    return jsonify({"success": True, "sos_events": filtered_events})
+
+@app.route("/v1/saathi/update-location", methods=["POST"])
+def update_saathi_location():
+    """Update saathi location for SOS notifications"""
+    try:
+        current_user = get_current_user()
+        if not current_user or current_user.role != 'saathi':
+            return jsonify({"success": False, "message": "Saathi authentication required"}), 401
+
+        data = request.get_json() or {}
+        latitude = data.get("latitude")
+        longitude = data.get("longitude")
+
+        if latitude is None or longitude is None:
+            return jsonify({"success": False, "message": "Latitude and longitude are required"}), 400
+
+        # Update saathi location in database
+        current_user.latitude = float(latitude)
+        current_user.longitude = float(longitude)
+        db.session.commit()
+
+        logger.info(f"Updated location for saathi {current_user.patient_id}: {latitude}, {longitude}")
+        return jsonify({"success": True, "message": "Location updated successfully"})
+
+    except Exception as e:
+        logger.error(f"Error updating saathi location: {e}")
+        db.session.rollback()
+        return jsonify({"success": False, "message": "Failed to update location"}), 500
 
 @app.route("/v1/sos-respond", methods=["POST"])
 def respond_to_sos():

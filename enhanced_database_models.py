@@ -38,6 +38,9 @@ class User(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     email_verified = db.Column(db.Boolean, default=False)
     phone_verified = db.Column(db.Boolean, default=False)
+    # Location information for saathi (for SOS notifications)
+    latitude = db.Column(db.Float, nullable=True)
+    longitude = db.Column(db.Float, nullable=True)
     
     # App usage tracking
     total_conversations = db.Column(db.Integer, default=0)
@@ -970,6 +973,27 @@ def seed_initial_saathis():
             "email": "saathi.rohan@sehara.com",
             "password": "password123",
             "role": "saathi" # CRITICAL: Set the role correctly
+        },
+        {
+            "patient_id": "SAATHI002",
+            "full_name": "Priya Patel (Saathi)",
+            "email": "saathi.priya@sehara.com",
+            "password": "password123",
+            "role": "saathi"
+        },
+        {
+            "patient_id": "SAATHI003",
+            "full_name": "Arjun Kumar (Saathi)",
+            "email": "saathi.arjun@sehara.com",
+            "password": "password123",
+            "role": "saathi"
+        },
+        {
+            "patient_id": "SAATHI004",
+            "full_name": "Meera Singh (Saathi)",
+            "email": "saathi.meera@sehara.com",
+            "password": "password123",
+            "role": "saathi"
         }
         # You can add more Saathi users here
     ]
