@@ -38,8 +38,6 @@ The platform is built across two repositories: a **Python/Flask backend** deploy
 - [AI & Integrations](#ai--integrations)
 - [Tech Stack](#tech-stack)
 - [Repository Structure](#repository-structure)
-- [Local Setup](#local-setup)
-- [Environment Variables](#environment-variables)
 - [Demo Credentials](#demo-credentials)
 - [Architecture](#architecture)
 
@@ -361,81 +359,7 @@ Two separate Groq clients are initialized on startup:
 └── requirements.txt              # Python dependencies
 ```
 
----
 
-## Local Setup
-
-### Prerequisites
-
-- Python 3.9+
-- pip
-- PostgreSQL (or SQLite for local dev — no setup needed)
-
-### Backend
-
-```bash
-git clone https://github.com/qwertyuiopas17/ram.git
-cd ram
-
-python -m venv venv
-source venv/bin/activate       # Windows: venv\Scripts\activate
-
-pip install -r requirements.txt
-
-# Add your environment variables (see section below)
-cp .env.example .env
-
-python chatbot.py
-```
-
-Server runs at `http://localhost:5000`.
-
-### Frontend
-
-```bash
-git clone https://github.com/qwertyuiopas17/master.git
-cd master
-
-# Serve with any static file server
-npx serve .
-# or use VS Code Live Server
-```
-
-By default the frontend points to the deployed backend. To use your local backend, update the API base URL in the JS files from the Render URL to `http://localhost:5000`.
-
----
-
-## Environment Variables
-
-Create a `.env` file in the backend root:
-
-```env
-# Database
-DATABASE_URL=postgresql://user:password@host:port/dbname
-
-# Flask
-SECRET_KEY=your-secret-key
-
-# Groq
-GROQ_LLM_KEY=your-groq-llm-key
-GROQ_WHISPER_KEY=your-groq-whisper-key
-
-# Agora
-AGORA_APP_ID=your-agora-app-id
-AGORA_APP_CERTIFICATE=your-agora-certificate
-
-# VAPID (Web Push) — required, app will not start without these
-VAPID_PUBLIC_KEY=your-vapid-public-key
-VAPID_PRIVATE_KEY=your-vapid-private-key
-
-# Bhashini
-BHASHINI_USER_ID=your-bhashini-user-id
-BHASHINI_ULCA_API_KEY=your-bhashini-ulca-api-key
-```
-
-> VAPID keys are mandatory — the server exits immediately on startup if they are missing. Generate a pair at [vapidkeys.com](https://vapidkeys.com) or via `py-vapid`.
-
----
 
 ## Demo Credentials
 
